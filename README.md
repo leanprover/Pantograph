@@ -17,17 +17,18 @@ nix build .#{sharedLib,executable}
 ```
 to build either the shared library or executable.
 
-Install `lake` and `lean` fixed to the version of the `lean-toolchain` file, and
-run
+For non-Nix users, install `lake` and `lean` fixed to the version of the
+`lean-toolchain` file, and run
 
 ``` sh
 lake build
 ```
-This builds the executable in `.lake/build/bin/pantograph-repl`.
+This builds the executable in `.lake/build/bin/repl`.
 
 ### Executable Usage
 
-The default build target is a Read-Eval-Print-Loop (REPL). See [REPL Documentation](./doc/repl.md)
+The default build target is a Read-Eval-Print-Loop (REPL). See [REPL
+Documentation](./doc/repl.md)
 
 Another executable is the `tomograph`, which processes a Lean file and displays
 syntax or elaboration level data.
@@ -42,7 +43,7 @@ Inject any project path via the `pantograph_init_search` function.
 
 ## Development
 
-A Lean development shell is provided in the Nix flake.
+A Lean development shell is provided in the Nix flake. Nix usage is optional.
 
 ### Testing
 
