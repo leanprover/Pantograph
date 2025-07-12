@@ -6,7 +6,6 @@ All the functions starting with `try` resume their inner monadic state.
 import Pantograph.Tactic
 import Lean
 
-
 namespace Pantograph
 open Lean
 
@@ -141,8 +140,7 @@ protected def GoalState.withRootContext { n } [MonadControlT MetaM n] [Monad n] 
 
 private def restoreCoreMExtra (state : Core.SavedState) : CoreM Unit :=
   let { nextMacroScope, ngen, .. } := state
-  modifyGetThe Core.State (fun st => ((),
-    { st with nextMacroScope, ngen }))
+  modifyThe Core.State ({ · with nextMacroScope, ngen })
 -- Restore the name generator and macro scopes of the core state
 protected def GoalState.restoreCoreMExtra (state: GoalState): CoreM Unit :=
   restoreCoreMExtra state.coreState
@@ -152,9 +150,6 @@ protected def GoalState.restoreMetaM (state: GoalState): MetaM Unit := do
 protected def GoalState.restoreElabM (state: GoalState): Elab.TermElabM Unit := do
   state.restoreCoreMExtra
   state.savedState.term.restore
-private def GoalState.restoreTacticM (state: GoalState) (goal: MVarId): Elab.Tactic.TacticM Unit := do
-  state.restoreElabM
-  Elab.Tactic.setGoals [goal]
 
 /--
 Brings into scope a list of goals. User must ensure `goals` are distinct.
@@ -469,7 +464,7 @@ protected def GoalState.step (state : GoalState) (site : Site) (tacticM : Elab.T
   : Elab.TermElabM GoalState :=
   Prod.snd <$> GoalState.step' state site tacticM guardMVarErrors
 
-/-- Response for executing a tactic -/
+/-- Result for executing a tactic, capturing errors in the process -/
 inductive TacticResult where
   -- Goes to next state
   | success (state : GoalState) (messages : Array Message)
@@ -480,40 +475,35 @@ inductive TacticResult where
   -- The given action cannot be executed in the state
   | invalidAction (message : String)
 
-private def dumpMessageLog (prevMessageLength : Nat := 0) : CoreM (Bool × List Message) := do
+private def dumpMessageLog (prevMessageLength : Nat := 0) : CoreM (List Message) := do
   let newMessages := (← Core.getMessageLog).toList.drop prevMessageLength
-  let hasErrors := newMessages.any (·.severity == .error)
   Core.resetMessageLog
-  return (hasErrors, newMessages)
+  return newMessages
 
 /-- Execute a `TermElabM` producing a goal state, capturing the error and turn it into a `TacticResult` -/
 def withCapturingError (elabM : Elab.Term.TermElabM GoalState) : Elab.TermElabM TacticResult := do
   let messageLog ← Core.getMessageLog
   unless messageLog.toList.isEmpty do
     IO.eprintln s!"{← messageLog.toList.mapM (·.toString)}"
-    assert! messageLog.toList.isEmpty
+    throwError "Message log must be empty at the beginning."
   try
     let state ← elabM
 
     -- Check if error messages have been generated in the core.
-    let (hasError, newMessages) ← dumpMessageLog
-    if hasError then
+    let newMessages ← dumpMessageLog
+    let hasErrors := newMessages.any (·.severity == .error)
+    if hasErrors then
       return .failure newMessages.toArray
     else
       return .success state newMessages.toArray
   catch exception =>
-    match exception with
-    | .internal _ =>
-      let (_, messages) ← dumpMessageLog
-      return .failure messages.toArray
-    | _ =>
-      let (_, messages) ← dumpMessageLog
-      let message := {
-        fileName := ← getFileName,
-        pos := ← getRefPosition,
-        data := exception.toMessageData,
-      }
-      return .failure (message :: messages).toArray
+    let messages ← dumpMessageLog
+    let message := {
+      fileName := ← getFileName,
+      pos := ← getRefPosition,
+      data := exception.toMessageData,
+    }
+    return .failure (message :: messages).toArray
 
 /-- Executes a `TacticM` monad on this `GoalState`, collecting the errors as necessary -/
 protected def GoalState.tryTacticM

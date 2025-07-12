@@ -2,7 +2,7 @@
   description = "Pantograph";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
     lean4-nix.url = "github:lenianiva/lean4-nix";
   };
@@ -45,10 +45,6 @@
           ./Pantograph.lean
           (fileFilter (file: file.hasExt "lean") ./Pantograph)
         ];
-        set-repl = unions [
-          ./Main.lean
-          ./Repl.lean
-        ];
         set-test = unions [
           (fileFilter (file: file.hasExt "lean") ./Test)
         ];
@@ -62,14 +58,22 @@
           root = src;
           fileset = unions [
             set-project
-            set-repl
+            ./Main.lean
+            ./Repl.lean
+          ];
+        };
+        src-tomograph = toSource {
+          root = src;
+          fileset = unions [
+            set-project
+            ./Tomograph.lean
           ];
         };
         src-test = toSource {
           root = src;
           fileset = unions [
             set-project
-            set-repl
+            ./Repl.lean
             set-test
           ];
         };
@@ -83,6 +87,12 @@
           roots = ["Main" "Repl"];
           deps = [project];
           src = src-repl;
+        };
+        tomograph = pkgs.lean.buildLeanPackage {
+          name = "tomograph";
+          roots = ["Tomograph"];
+          deps = [project];
+          src = src-tomograph;
         };
         test = pkgs.lean.buildLeanPackage {
           name = "Test";
@@ -98,6 +108,7 @@
           inherit (pkgs.lean) lean lean-all;
           inherit (project) sharedLib iTree;
           inherit (repl) executable;
+          tomograph = tomograph.executable;
           default = repl.executable;
         };
         legacyPackages = {

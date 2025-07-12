@@ -257,13 +257,16 @@ structure GoalTactic where
   autoResume?: Option Bool := .none
   -- One of the fields here must be filled
   tactic?: Option String := .none
-  mode?: Option String := .none -- Changes the current category to {"tactic", "calc", "conv"}
+  -- Changes the current category to {"tactic", "calc", "conv"}
+  mode?: Option String := .none
+  -- Assigns an expression to the current goal
   expr?: Option String := .none
   have?: Option String := .none
   let?: Option String := .none
   draft?: Option String := .none
 
-  -- In case of the `have` tactic, the new free variable name is provided here
+  -- In case of the `have` and `let` tactics, the new free variable name is
+  -- provided here
   binderName?: Option String := .none
 
   deriving Lean.FromJson

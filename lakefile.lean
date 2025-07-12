@@ -18,7 +18,6 @@ lean_exe repl {
   supportInterpreter := true
 }
 
-@[default_target]
 lean_exe tomograph {
   root := `Tomograph
   -- Solves the native symbol not found problem
