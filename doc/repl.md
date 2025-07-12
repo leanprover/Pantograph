@@ -15,9 +15,10 @@ The `repl` executable must be given with a list of modules to import. By default
 it will import nothing, not even `Init`. It can also accept lean options of the
 form `--key=value` e.g. `--pp.raw=true`.
 
-The REPL loop accepts commands as single-line JSON inputs and outputs either an
-`Error:` (indicating malformed command) or a JSON return value indicating the
-result of a command execution. It accepts commands in one of two formats
+After it emits the `ready.` signal, `repl` accepts commands as single-line JSON
+inputs and outputs either an `Error:` (indicating malformed command) or a JSON
+return value indicating the result of a command execution. The command must be
+given in one of two formats
 
 ```
 command { ... }
