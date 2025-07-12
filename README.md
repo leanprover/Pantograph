@@ -27,7 +27,10 @@ This builds the executable in `.lake/build/bin/pantograph-repl`.
 
 ### Executable Usage
 
-See [Executable Usage](./doc/repl.md)
+The default build target is a Read-Eval-Print-Loop (REPL). See [REPL Documentation](./doc/repl.md)
+
+Another executable is the `tomograph`, which processes a Lean file and displays
+syntax or elaboration level data.
 
 ### Library Usage
 
