@@ -10,7 +10,6 @@ namespace Lean.Elab
 private def elaboratorToString : Name → String
   | .anonymous => ""
   | n => s!"⟨{n}⟩ "
-private def indent (s : String) : String := "\n".intercalate $ s.splitOn "\n" |>.map ("  " ++ .)
 
 /-- The `Syntax` for a `Lean.Elab.Info`, if there is one. -/
 protected def Info.stx? : Info → Option Syntax
@@ -125,7 +124,9 @@ partial def InfoTree.findAllInfoM [Monad m]
   | _ => return []
 
 @[export pantograph_infotree_to_string_m]
-partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .none) : IO String := do
+partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .none) (indent : Nat := 0)
+  : IO String := do
+  let space := String.join $ List.replicate indent "  "
   match t with
   | .context ctx t => t.toString (ctx.mergeIntoOuter? ctx?)
   | .node info children =>
@@ -145,13 +146,15 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
       | .ofChoiceInfo _ => pure "[choice]"
       | .ofPartialTermInfo  _ => pure "[partial_term]"
       | .ofDelabTermInfo _ => pure "[delab_term]"
-      let children := "\n".intercalate (← children.toList.mapM λ t' => do pure $ indent $ ← t'.toString ctx)
-      return s!"{node}\n{children}"
+      let children ← children.toList.mapM λ t' => do
+        t'.toString ctx (indent := indent + 1)
+      let children := String.join children
+      return s!"{space}{node}\n{children}"
     else throw <| IO.userError "No `ContextInfo` available."
   | .hole mvarId =>
     if let some ctx := ctx? then
       let payload := (← ctx.runMetaM {} (do Meta.ppGoal mvarId)).pretty
-      return s!"[hole] {payload}"
+      return s!"{space}[hole] {payload}"
     else throw <| IO.userError "No `ContextInfo` available."
 
 end Lean.Elab
