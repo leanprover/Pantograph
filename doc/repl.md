@@ -4,37 +4,48 @@ This documentation is about interacting with the REPL.
 
 ## Examples
 
+After building the `repl`, it will be available in `.lake/build/bin/repl`.
+Execute it by either directly referring to its name, or `lake exe repl`.
+
 ``` sh
-pantograph-repl MODULES|LEAN_OPTIONS
+repl MODULES|LEAN_OPTIONS
 ```
 
-The `pantograph-repl` executable must be run with a list of modules to import.
-It can also accept lean options of the form `--key=value` e.g. `--pp.raw=true`.
+The `repl` executable must be given with a list of modules to import. By default
+it will import nothing, not even `Init`. It can also accept lean options of the
+form `--key=value` e.g. `--pp.raw=true`.
 
 The REPL loop accepts commands as single-line JSON inputs and outputs either an
 `Error:` (indicating malformed command) or a JSON return value indicating the
-result of a command execution.  The command can be passed in one of two formats
+result of a command execution. It accepts commands in one of two formats
+
 ```
 command { ... }
 { "cmd": command, "payload": ... }
 ```
-The list of available commands can be found in `Pantograph/Protocol.lean` and below. An
-empty command aborts the REPL.
+
+The list of available commands can be found below. An empty command aborts the
+REPL.
 
 Example: (~5k symbols)
 ```
-$ pantograph Init
+$ repl Init
 env.catalog
 env.inspect {"name": "Nat.le_add_left"}
 ```
+
 Example with `mathlib4` (~90k symbols, may stack overflow, see troubleshooting)
+
 ```
-$ pantograph Mathlib.Analysis.Seminorm
+$ repl Mathlib.Analysis.Seminorm
 env.catalog
 ```
-Example proving a theorem: (alternatively use `goal.start {"copyFrom": "Nat.add_comm"}`) to prime the proof
+
+Example proving a theorem: (alternatively use `goal.start {"copyFrom": "Nat.add_comm"}`)
+to prime the proof
+
 ```
-$ pantograph Init
+$ repl Init
 goal.start {"expr": "∀ (n m : Nat), n + m = m + n"}
 goal.tactic {"stateId": 0, "tactic": "intro n m"}
 goal.tactic {"stateId": 1, "tactic": "assumption"}
@@ -59,7 +70,7 @@ LIB="../lib"
 LIB_MATHLIB="$LIB/mathlib4/.lake"
 export LEAN_PATH="$LIB_MATHLIB:$LIB_MATHLIB/aesop/build/lib:$LIB_MATHLIB/Qq/build/lib:$LIB_MATHLIB/std/build/lib"
 
-LEAN_PATH=$LEAN_PATH build/bin/pantograph $@
+LEAN_PATH=$LEAN_PATH repl $@
 ```
 The `$LEAN_PATH` executable of any project can be extracted by
 ``` sh
