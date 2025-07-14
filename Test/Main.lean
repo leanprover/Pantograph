@@ -1,4 +1,3 @@
-import LSpec
 import Test.Delate
 import Test.Environment
 import Test.Frontend
@@ -8,6 +7,8 @@ import Test.Metavar
 import Test.Proofs
 import Test.Serial
 import Test.Tactic
+
+import LSpec
 
 -- Test running infrastructure
 
