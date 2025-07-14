@@ -111,7 +111,7 @@ partial def translateLCtx : MetaTranslateM LocalContext := do
   let lctx ← MonadLCtx.getLCtx
   assert! lctx.isEmpty
   (← getSourceLCtx).foldlM (λ lctx srcLocalDecl => do
-    let localDecl ← Meta.withLCtx lctx #[] do
+    let localDecl ← Meta.withLCtx' lctx do
       translateLocalDecl srcLocalDecl
     pure $ lctx.addDecl localDecl
   ) lctx
@@ -149,6 +149,7 @@ def translateMVarFromTermInfo (termInfo : Elab.TermInfo) (context? : Option Elab
     let type := termInfo.expectedType?.get!
     let lctx' ← translateLCtx
     let mvar ← Meta.withLCtx lctx' #[] do
+      Meta.withLocalInstances (lctx'.decls.toList.filterMap id) do
       let type' ← translateExpr type
       trace[Pantograph.Frontend.MetaTranslate] "Translating from term info {← Meta.ppExpr type'}"
       Meta.mkFreshExprSyntheticOpaqueMVar type'
