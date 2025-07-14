@@ -101,16 +101,33 @@ def environmentUnpickle (path : System.FilePath) (background? : Option Environme
   return (← resurrectEnvironment distilled background?, region)
 
 
-open Lean.Core in
+/-- `CoreM`'s state, with information irrelevant to pickling masked out -/
 structure CompactCoreState where
   -- env             : Environment
   nextMacroScope  : MacroScope     := firstFrontendMacroScope + 1
   ngen            : NameGenerator  := {}
+  auxDeclNGen     : DeclNameGenerator := {}
   -- traceState      : TraceState     := {}
   -- cache           : Cache     := {}
   -- messages        : MessageLog     := {}
   -- infoState       : Elab.InfoState := {}
 
+structure CompactGoalState where
+  env : DistilledEnvironment
+
+  core : CompactCoreState
+  meta : Meta.State
+  «elab»: Elab.Term.State
+  tactic: Elab.Tactic.State
+  root: MVarId
+  parentMVars: List MVarId
+  fragments: FragmentMap
+
+/-- Pickles a goal state by taking its diff relative to a background
+environment. This function eliminates all `MessageData` from synthetic
+metavariables, because these `MessageData` objects frequently carry closures,
+which cannot be pickled. If there is no synthetic metavariable, this would not
+cause a difference. -/
 @[export pantograph_goal_state_pickle_m]
 def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background? : Option Environment := .none)
   : IO Unit :=
@@ -119,11 +136,13 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
       term := {
         meta := {
           core := {
-            env, nextMacroScope, ngen, ..
+            env, nextMacroScope, ngen, auxDeclNGen, ..
           },
           meta,
         }
-        «elab»,
+        «elab» := «elab»@{
+          syntheticMVars, ..
+        },
       },
       tactic
     }
@@ -131,26 +150,33 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     parentMVars,
     fragments,
   } := goalState
-  pickle path (
-    distillEnvironment env background?,
+  -- Delete `MessageData`s
+  let syntheticMVars : MVarIdMap _ := syntheticMVars.fold (init := .empty) λ acc key val =>
+    let kind := match val.kind with
+      | .typeClass _ => .typeClass .none
+      | .coe header? expectedType e f? _ => .coe header? expectedType e f? .none
+      | k => k
+    acc.insert key { val with kind }
+  pickle path ({
+    env := distillEnvironment env background?,
 
-    ({ nextMacroScope, ngen } : CompactCoreState),
+    core := ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
     meta,
-    «elab»,
+    «elab» := { «elab» with syntheticMVars },
     tactic,
 
     root,
     parentMVars,
     fragments,
-  )
+  } : CompactGoalState)
 
 @[export pantograph_goal_state_unpickle_m]
 def goalStateUnpickle (path : System.FilePath) (background? : Option Environment := .none)
     : IO (GoalState × CompactedRegion) := unsafe do
-  let ((
-    distilledEnv,
+  let ({
+    env,
 
-    compactCore,
+    core,
     meta,
     «elab»,
     tactic,
@@ -158,25 +184,14 @@ def goalStateUnpickle (path : System.FilePath) (background? : Option Environment
     root,
     parentMVars,
     fragments,
-  ), region) ← Pantograph.unpickle (
-    DistilledEnvironment ×
-
-    CompactCoreState ×
-    Meta.State ×
-    Elab.Term.State ×
-    Elab.Tactic.State ×
-
-    MVarId ×
-    List MVarId ×
-    FragmentMap
-  ) path
-  let env ← resurrectEnvironment distilledEnv background?
+  }, region) ← Pantograph.unpickle CompactGoalState path
+  let env ← resurrectEnvironment env background?
   let goalState := {
     savedState := {
       term := {
         meta := {
           core := {
-            compactCore with
+            core with
             passedHeartbeats := 0,
             env,
           },
