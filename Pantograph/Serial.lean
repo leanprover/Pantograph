@@ -123,7 +123,9 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
           },
           meta,
         }
-        «elab»,
+        «elab» := «elab»@{
+          syntheticMVars, ..
+        },
       },
       tactic
     }
@@ -131,12 +133,18 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     parentMVars,
     fragments,
   } := goalState
+  let syntheticMVars : MVarIdMap _ := syntheticMVars.fold (init := .empty) λ acc key val =>
+    let kind := match val.kind with
+      | .typeClass _ => .typeClass .none
+      | .coe header? expectedType e f? _ => .coe header? expectedType e f? .none
+      | k => k
+    acc.insert key { val with kind }
   pickle path (
     distillEnvironment env background?,
 
     ({ nextMacroScope, ngen } : CompactCoreState),
     meta,
-    «elab»,
+    { «elab» with syntheticMVars },
     tactic,
 
     root,

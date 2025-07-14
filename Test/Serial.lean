@@ -96,6 +96,21 @@ def test_pickling_env_extensions : TestM Unit := do
 
   return ()
 
+/-- Synthetic mvars in this case creates closures. These cannot be pickled. -/
+def test_pickling_synthetic_mvars : TestM Unit := do
+  let coreSrc : Core.State := { env := ← getEnv }
+  IO.FS.withTempFile λ _ statePath => do
+  let stateGenerate : MetaM GoalState := runTermElabMInMeta do
+    let type ← Elab.Term.elabTerm (← `(term|(0 : Nat) < 1)) .none
+    let state ← GoalState.create type
+    let .success state _ ← state.tryHave .unfocus "h" "0 < 2" | unreachable!
+    assert! state.savedState.term.elab.syntheticMVars.size > 0
+    return state
+
+  let ((), _) ← runCoreM coreSrc do
+    let state ← stateGenerate.run'
+    goalStatePickle state statePath
+
 structure Test where
   name : String
   routine: TestM Unit
@@ -115,6 +130,7 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests: List Test := [
     { name := "environment", routine := test_pickling_environment, },
     { name := "goal simple", routine := test_goal_state_simple, },
+    { name := "goal synthetic mvars", routine := test_pickling_synthetic_mvars, },
     { name := "extensions", routine := test_pickling_env_extensions, },
   ]
   tests.map (fun test => (test.name, test.run env))
