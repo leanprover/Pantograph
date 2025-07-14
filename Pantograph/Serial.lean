@@ -101,7 +101,7 @@ def environmentUnpickle (path : System.FilePath) (background? : Option Environme
   return (← resurrectEnvironment distilled background?, region)
 
 
-open Lean.Core in
+/-- `CoreM`'s state, with information irrelevant to pickling masked out -/
 structure CompactCoreState where
   -- env             : Environment
   nextMacroScope  : MacroScope     := firstFrontendMacroScope + 1
