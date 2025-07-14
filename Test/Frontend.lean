@@ -201,6 +201,24 @@ example (α : Type) [Inhabited α] : α := sorry
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
+def test_sorry_circular : TestT MetaM Unit := do
+  let sketch := "
+theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
+  "
+  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
+  let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test α"
+  checkTrue "failure" $ result matches .failure ..
+  match result with
+  | .success .. =>
+    fail s!"This should not succeed"
+  | .failure .. =>
+    return ()
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
+
 def test_environment_capture: TestT MetaM Unit := do
   let sketch := "
 def mystery (n: Nat) := n + 1
@@ -280,6 +298,7 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("sorry in induction", test_sorry_in_induction),
     ("sorry in coupled", test_sorry_in_coupled),
     ("sorry with local instances", test_sorry_with_local_instance),
+    ("sorry circular", test_sorry_circular),
     ("environment_capture", test_environment_capture),
     ("capture_type_mismatch", test_capture_type_mismatch),
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
