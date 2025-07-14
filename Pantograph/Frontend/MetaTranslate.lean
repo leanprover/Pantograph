@@ -148,7 +148,6 @@ def translateMVarFromTermInfo (termInfo : Elab.TermInfo) (context? : Option Elab
   }) do
     let type := termInfo.expectedType?.get!
     let lctx' ← translateLCtx
-    --let localInstances' ← srcDecl.localInstances.mapM translateLocalInstance
     let mvar ← Meta.withLCtx lctx' #[] do
       Meta.withLocalInstances (lctx'.decls.toList.filterMap id) do
       let type' ← translateExpr type
