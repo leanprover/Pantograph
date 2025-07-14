@@ -106,11 +106,17 @@ structure CompactCoreState where
   -- env             : Environment
   nextMacroScope  : MacroScope     := firstFrontendMacroScope + 1
   ngen            : NameGenerator  := {}
+  auxDeclNGen     : DeclNameGenerator := {}
   -- traceState      : TraceState     := {}
   -- cache           : Cache     := {}
   -- messages        : MessageLog     := {}
   -- infoState       : Elab.InfoState := {}
 
+/-- Pickles a goal state by taking its diff relative to a background
+environment. This function eliminates all `MessageData` from synthetic
+metavariables, because these `MessageData` objects frequently carry closures,
+which cannot be pickled. If there is no synthetic metavariable, this would not
+cause a difference. -/
 @[export pantograph_goal_state_pickle_m]
 def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background? : Option Environment := .none)
   : IO Unit :=
@@ -119,7 +125,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
       term := {
         meta := {
           core := {
-            env, nextMacroScope, ngen, ..
+            env, nextMacroScope, ngen, auxDeclNGen, ..
           },
           meta,
         }
@@ -133,6 +139,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     parentMVars,
     fragments,
   } := goalState
+  -- Delete `MessageData`s
   let syntheticMVars : MVarIdMap _ := syntheticMVars.fold (init := .empty) λ acc key val =>
     let kind := match val.kind with
       | .typeClass _ => .typeClass .none
@@ -142,7 +149,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
   pickle path (
     distillEnvironment env background?,
 
-    ({ nextMacroScope, ngen } : CompactCoreState),
+    ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
     meta,
     { «elab» with syntheticMVars },
     tactic,
