@@ -112,6 +112,17 @@ structure CompactCoreState where
   -- messages        : MessageLog     := {}
   -- infoState       : Elab.InfoState := {}
 
+structure CompactGoalState where
+  env : DistilledEnvironment
+
+  core : CompactCoreState
+  meta : Meta.State
+  «elab»: Elab.Term.State
+  tactic: Elab.Tactic.State
+  root: MVarId
+  parentMVars: List MVarId
+  fragments: FragmentMap
+
 /-- Pickles a goal state by taking its diff relative to a background
 environment. This function eliminates all `MessageData` from synthetic
 metavariables, because these `MessageData` objects frequently carry closures,
@@ -146,26 +157,26 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
       | .coe header? expectedType e f? _ => .coe header? expectedType e f? .none
       | k => k
     acc.insert key { val with kind }
-  pickle path (
-    distillEnvironment env background?,
+  pickle path ({
+    env := distillEnvironment env background?,
 
-    ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
+    core := ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
     meta,
-    { «elab» with syntheticMVars },
+    «elab» := { «elab» with syntheticMVars },
     tactic,
 
     root,
     parentMVars,
     fragments,
-  )
+  } : CompactGoalState)
 
 @[export pantograph_goal_state_unpickle_m]
 def goalStateUnpickle (path : System.FilePath) (background? : Option Environment := .none)
     : IO (GoalState × CompactedRegion) := unsafe do
-  let ((
-    distilledEnv,
+  let ({
+    env,
 
-    compactCore,
+    core,
     meta,
     «elab»,
     tactic,
@@ -173,25 +184,14 @@ def goalStateUnpickle (path : System.FilePath) (background? : Option Environment
     root,
     parentMVars,
     fragments,
-  ), region) ← Pantograph.unpickle (
-    DistilledEnvironment ×
-
-    CompactCoreState ×
-    Meta.State ×
-    Elab.Term.State ×
-    Elab.Tactic.State ×
-
-    MVarId ×
-    List MVarId ×
-    FragmentMap
-  ) path
-  let env ← resurrectEnvironment distilledEnv background?
+  }, region) ← Pantograph.unpickle CompactGoalState path
+  let env ← resurrectEnvironment env background?
   let goalState := {
     savedState := {
       term := {
         meta := {
           core := {
-            compactCore with
+            core with
             passedHeartbeats := 0,
             env,
           },
