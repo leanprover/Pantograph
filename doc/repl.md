@@ -57,8 +57,6 @@ stat
 ```
 where the application of `assumption` should lead to a failure.
 
-For a list of commands, see [REPL Documentation](doc/repl.md).
-
 ### Project Environment
 
 To use Pantograph in a project environment, setup the `LEAN_PATH` environment
