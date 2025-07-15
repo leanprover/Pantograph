@@ -182,6 +182,43 @@ example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
     }
   ])
 
+def test_sorry_with_local_instance : TestT MetaM Unit := do
+  let sketch := "
+def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
+example (α : Type) [Inhabited α] : α := sorry
+  "
+  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
+  let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test α"
+  checkTrue "success" $ result matches .success ..
+  match result with
+  | .success .. => return ()
+  | .failure messages =>
+    let messages ← messages.mapM (·.toString)
+    fail s!"Could not execute tactic {messages}"
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
+
+def test_sorry_circular : TestT MetaM Unit := do
+  let sketch := "
+theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
+  "
+  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
+  let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test α"
+  checkTrue "failure" $ result matches .failure ..
+  match result with
+  | .success .. =>
+    fail s!"This should not succeed"
+  | .failure .. =>
+    return ()
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
+
 def test_environment_capture: TestT MetaM Unit := do
   let sketch := "
 def mystery (n: Nat) := n + 1
@@ -257,9 +294,11 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("open", test_open),
     ("multiple_sorrys_in_proof", test_multiple_sorrys_in_proof),
-    ("sorry_in_middle", test_sorry_in_middle),
-    ("sorry_in_induction", test_sorry_in_induction),
-    ("sorry_in_coupled", test_sorry_in_coupled),
+    ("sorry in middle", test_sorry_in_middle),
+    ("sorry in induction", test_sorry_in_induction),
+    ("sorry in coupled", test_sorry_in_coupled),
+    ("sorry with local instances", test_sorry_with_local_instance),
+    ("sorry circular", test_sorry_circular),
     ("environment_capture", test_environment_capture),
     ("capture_type_mismatch", test_capture_type_mismatch),
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
