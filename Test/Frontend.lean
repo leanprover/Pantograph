@@ -32,7 +32,7 @@ def collectSorrysFromSource (source: String) (options : Frontend.GoalCollectionO
     : MetaM (List GoalState) := do
   let filename := "<anonymous>"
   let (context, state) ← do Frontend.createContextStateFromFile source filename (← getEnv) {}
-  let m := Frontend.mapCompilationSteps λ step => do
+  let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     return (step.before, ← Frontend.collectSorrys step options)
   let li ← m.run {} |>.run context |>.run' state
   let goalStates ← li.filterMapM λ (env, sorrys) => withEnv env do
@@ -267,7 +267,7 @@ example (p: Prop) (h: (∀ (x: Prop), Nat) → p): p := h (λ (y: Nat) => 5)
 def collectNewConstants (source: String) : MetaM (List (List Name)) := do
   let filename := "<anonymous>"
   let (context, state) ← do Frontend.createContextStateFromFile source filename (← getEnv) {}
-  let m := Frontend.mapCompilationSteps λ step => do
+  let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     Frontend.collectNewDefinedConstants step
   m.run {} |>.run context |>.run' state
 

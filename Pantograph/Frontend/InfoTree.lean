@@ -1,5 +1,6 @@
 /- Adapted from lean-training-data -/
 import Lean.Elab.InfoTree
+import Lean.Elab.Util
 import Lean.Parser.Term
 import Lean.PrettyPrinter
 
@@ -132,13 +133,13 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
   | .node info children =>
     if let some ctx := ctx? then
       let node : String ← match info with
-      | .ofTermInfo    info => pure s!"[term] {info.stx}"
-      | .ofCommandInfo info => pure s!"[command] {info.stx}"
-      | .ofTacticInfo  info => pure s!"[tactic] {info.stx}"
+      | .ofTermInfo    info => pure s!"[term] {info.stx.prettyPrint}"
+      | .ofCommandInfo info => pure s!"[command] {info.stx.prettyPrint}"
+      | .ofTacticInfo  info => pure s!"[tactic] {info.stx.prettyPrint}"
       | .ofMacroExpansionInfo _ => pure "[macro_exp]"
-      | .ofOptionInfo info => pure s!"[option] {info.stx}"
+      | .ofOptionInfo info => pure s!"[option] {info.stx.prettyPrint}"
       | .ofFieldInfo _ => pure "[field]"
-      | .ofCompletionInfo info => pure s!"[completion] {info.stx}"
+      | .ofCompletionInfo info => pure s!"[completion] {info.stx.prettyPrint}"
       | .ofUserWidgetInfo _ => pure "[user_widget]"
       | .ofCustomInfo _ => pure "[custom]"
       | .ofFVarAliasInfo _ => pure "[fvar_alias]"

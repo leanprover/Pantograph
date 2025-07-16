@@ -70,10 +70,11 @@ structure CompilationStep where
 
 def elabCommandAtFrontend (stx : Syntax) : FrontendM Unit := do
   runCommandElabM do
-    let initMsgs ← modifyGet fun st => (st.messages, { st with messages := {} })
+    let initMsgs ← modifyGet λ st =>
+      (st.messages, { st with messages := {} })
     Elab.Command.elabCommandTopLevel stx
-    let mut msgs := (← get).messages
-    modify ({ · with messages := initMsgs ++ msgs })
+    modify λ state => { state with
+      messages := initMsgs ++ state.messages }
 
 open Elab.Frontend in
 def processCommand : FrontendM Bool := do
@@ -111,20 +112,32 @@ def processOneCommand: FrontendM (CompilationStep × Bool) := do
   let ⟨_, fileName, fileMap⟩  := (← readThe Elab.Frontend.Context).inputCtx
   return ({ scope := s.scopes.head!, fileName, fileMap, src, stx, before, after, msgs, trees }, done)
 
-partial def mapCompilationSteps { α } (f: CompilationStep → FrontendM α) : FrontendM (List α) := do
+/-- Executes a `FrontendM`-based monad until completion -/
+partial def executeFrontend { m } [Monad m] [MonadLiftT FrontendM m]
+  (f: CompilationStep → m Unit) : m Unit := do
   let (cmd, done) ← processOneCommand
   if done then
     if cmd.src.isEmpty then
-      return []
+      return ()
     else
-      return [← f cmd]
+      f cmd
   else
-    return (← f cmd) :: (← mapCompilationSteps f)
+    f cmd
+    executeFrontend f
 
+def mapCompilationSteps { m α }
+  [Monad m] [MonadLiftT FrontendM m] [MonadLiftT (ST IO.RealWorld) m]
+  (f: CompilationStep → m α) : m (List α) := do
+  let f' (step : CompilationStep) : StateRefT' IO.RealWorld (List α) m Unit := do
+    let a ← f step
+    modify (a :: ·)
+  let (_, li) ← executeFrontend f' |>.run []
+  return li.reverse
 
 @[export pantograph_frontend_find_source_path_m]
 def findSourcePath (module : Name) : IO System.FilePath := do
-  return System.FilePath.mk ((← findOLean module).toString.replace ".lake/build/lib/" "") |>.withExtension "lean"
+  let olean ← findOLean module
+  return System.FilePath.mk (olean.toString.replace ".lake/build/lib/" "") |>.withExtension "lean"
 
 /--
 Use with
