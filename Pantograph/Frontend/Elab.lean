@@ -53,9 +53,6 @@ protected def goalState (t : TacticInvocation) : IO (List Format) := do
 protected def goalStateAfter (t : TacticInvocation) : IO (List Format) := do
   t.runMetaMGoalsAfter (fun gs => gs.mapM fun g => do Meta.ppGoal g)
 
-protected def ppExpr (t : TacticInvocation) (e : Expr) : IO Format :=
-  t.runMetaM (fun _ => do Meta.ppExpr (← instantiateMVars e))
-
 protected def usedConstants (t: TacticInvocation) : NameSet :=
   let info := t.info
   info.goalsBefore
