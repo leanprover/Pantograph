@@ -269,7 +269,8 @@ def collectNewConstants (source: String) : MetaM (List (List Name)) := do
   let (context, state) ← do Frontend.createContextStateFromFile source filename (← getEnv) {}
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     Frontend.collectNewDefinedConstants step
-  m.run {} |>.run context |>.run' state
+  let result ← m.run {} |>.run context |>.run' state
+  return result.map (·.toList)
 
 def test_collect_one_constant : TestT MetaM Unit := do
   let input := "

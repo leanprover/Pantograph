@@ -184,7 +184,7 @@ structure CompilationUnit where
   invocations : List Protocol.InvokedTactic
   sorrys : List Frontend.InfoWithContext
   messages : Array SerialMessage
-  newConstants : List Name
+  newConstants : NameSet
 
 def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendProcessResult := do
   let options := (← getMainState).options
@@ -215,7 +215,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
     let newConstants ← if args.newConstants then
         Frontend.collectNewDefinedConstants step
       else
-        pure []
+        pure .empty
     return {
       env := step.before,
       boundary,

@@ -124,8 +124,11 @@ partial def InfoTree.findAllInfoM [Monad m]
     return head ++ (← tail).flatten
   | _ => return []
 
+structure InfoTreePrintOptions where
+  prettyPrint : Bool := true
+
 @[export pantograph_infotree_to_string_m]
-partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .none) (indent : Nat := 0)
+partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .none) (options : InfoTreePrintOptions := {}) (indent : Nat := 0)
   : IO String := do
   let space := String.join $ List.replicate indent "  "
   match t with
@@ -133,8 +136,13 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
   | .node info children =>
     if let some ctx := ctx? then
       let node : String ← match info with
-      | .ofTermInfo    info => pure s!"[term] {info.stx.prettyPrint}"
-      | .ofCommandInfo info => pure s!"[command] {info.stx.prettyPrint}"
+      | .ofTermInfo { stx, expr, .. } =>
+        pure s!"[term] {stx.prettyPrint} ➡ {expr}"
+      | .ofCommandInfo info =>
+        let head := match info.stx.getArg 1 with
+          | .missing => ""
+          | other => s!" {other.getKind.toString}"
+        pure s!"[command/{info.stx.getKind.toString}{head}] {info.stx.prettyPrint}"
       | .ofTacticInfo  info => pure s!"[tactic] {info.stx.prettyPrint}"
       | .ofMacroExpansionInfo _ => pure "[macro_exp]"
       | .ofOptionInfo info => pure s!"[option] {info.stx.prettyPrint}"
@@ -148,7 +156,7 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
       | .ofPartialTermInfo  _ => pure "[partial_term]"
       | .ofDelabTermInfo _ => pure "[delab_term]"
       let children ← children.toList.mapM λ t' => do
-        t'.toString ctx (indent := indent + 1)
+        t'.toString ctx options (indent := indent + 1)
       let children := String.join children
       return s!"{space}{node}\n{children}"
     else throw <| IO.userError "No `ContextInfo` available."
