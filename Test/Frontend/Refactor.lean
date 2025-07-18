@@ -21,7 +21,7 @@ theorem mystery (n : Nat) : f n = n := sorry
 def f_composite : Σ' f : Nat → Nat, ∀ (n : Nat), f n = n := sorry
   ".trim
   let result ← runRefactor env src
-  checkEq "result" result expected
+  checkEq "result" result.trim expected
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [

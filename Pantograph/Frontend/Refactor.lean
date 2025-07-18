@@ -181,8 +181,11 @@ def runRefactor (env : Environment) (source: String) (rContext : Refactor.Contex
   let (fContext, fState) ← createContextStateFromFile source filename env {}
   let m : RefactorM _ := do
     preprocessRefactor
-    let f ← collectNextCommand
-    return toString f
+    let mut result := Format.nil
+    while !(← get).commands.isEmpty do
+      let f ← collectNextCommand
+      result := result ++ Format.line ++ f
+    return toString result
   m.run rContext |>.run' {}
     |>.run {}
     |>.run fContext |>.run' fState
