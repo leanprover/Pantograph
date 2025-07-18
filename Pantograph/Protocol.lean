@@ -408,6 +408,13 @@ structure FrontendData where
   units : List FrontendDataUnit
   deriving Lean.ToJson
 
+structure FrontendRefactor where
+  file : String
+  deriving Lean.FromJson
+structure FrontendRefactorResult where
+  file : String
+  deriving Lean.ToJson
+
 abbrev FallibleT := ExceptT InteractionError
 
 abbrev throw {m : Type v → Type w} [MonadExceptOf InteractionError m] {α : Type v} (e : InteractionError) : m α :=

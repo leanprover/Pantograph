@@ -303,6 +303,7 @@ def execute (command: Protocol.Command): MainM Json := do
   | "goal.save"     => run goal_save
   | "goal.load"     => run goal_load
   | "frontend.process" => run frontend_process
+  | "frontend.refactor" => run frontend_refactor
   | cmd =>
     let error: Protocol.InteractionError :=
       errorCommand s!"Unknown command {cmd}"
@@ -431,5 +432,12 @@ def execute (command: Protocol.Command): MainM Json := do
     let (goalState, _) ← goalStateUnpickle args.path (background? := .some $ ← getEnv)
     let id ← newGoalState goalState
     return { id }
+  frontend_refactor (args : Protocol.FrontendRefactor) : EMainM Protocol.FrontendRefactorResult := do
+    try
+      let file ← Frontend.runRefactor (← getEnv) args.file
+      return { file }
+    catch ex : IO.Error =>
+      let error : Protocol.InteractionError := { error := "frontend", desc := ex.toString }
+      throw error
 
 end Pantograph.Repl

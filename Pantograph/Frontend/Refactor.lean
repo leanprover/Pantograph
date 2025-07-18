@@ -174,4 +174,17 @@ def collectNextCommand : RefactorM Format := do
 
 end Refactor
 
+open Refactor in
+def runRefactor (env : Environment) (source: String) (rContext : Refactor.Context := {})
+  : IO String := do
+  let filename := "<anonymous>"
+  let (fContext, fState) ← createContextStateFromFile source filename env {}
+  let m : RefactorM _ := do
+    preprocessRefactor
+    let f ← collectNextCommand
+    return toString f
+  m.run rContext |>.run' {}
+    |>.run {}
+    |>.run fContext |>.run' fState
+
 export Refactor (RefactorM)
