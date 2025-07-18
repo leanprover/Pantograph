@@ -48,7 +48,8 @@ def main (args: List String) := do
 
   let suites: List (String × (Lean.Environment → List (String × IO LSpec.TestSeq))) := [
     ("Environment", Environment.suite),
-    ("Frontend", Frontend.suite),
+    ("Frontend/Collect", Frontend.Collect.suite),
+    ("Frontend/Refactor", Frontend.Refactor.suite),
     ("Integration", Integration.suite),
     ("Library", Library.suite),
     ("Metavar", Metavar.suite),
