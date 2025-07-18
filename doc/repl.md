@@ -15,6 +15,8 @@ The `repl` executable must be given with a list of modules to import. By default
 it will import nothing, not even `Init`. It can also accept lean options of the
 form `--key=value` e.g. `--pp.raw=true`.
 
+Running repl with `--version` shows the version and then exits.
+
 After it emits the `ready.` signal, `repl` accepts commands as single-line JSON
 inputs and outputs either an `Error:` (indicating malformed command) or a JSON
 return value indicating the result of a command execution. The command must be
@@ -56,8 +58,6 @@ goal.tactic {"stateId": 1, "tactic": "rw [Nat.add_comm]"}
 stat
 ```
 where the application of `assumption` should lead to a failure.
-
-For a list of commands, see [REPL Documentation](doc/repl.md).
 
 ### Project Environment
 
