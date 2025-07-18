@@ -286,6 +286,12 @@ theorem mystery [SizeOf α] (as : List α) (i : Fin as.length) : sizeOf (as.get 
   "
   let names ← collectNewConstants input
   checkEq "constants" names [[`mystery]]
+def test_collect_stub : TestT MetaM Unit := do
+  let input := "
+theorem mystery [SizeOf α] (as : List α) (i : Fin as.length) : sizeOf (as.get i) < sizeOf as := sorry
+  "
+  let names ← collectNewConstants input
+  checkEq "constants" names [[`mystery]]
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
@@ -301,5 +307,6 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
     ("collect_one_constant", test_collect_one_constant),
     ("collect_one_theorem", test_collect_one_theorem),
+    ("collect_stub", test_collect_stub),
   ]
   tests.map (fun (name, test) => (name, runMetaMSeq env $ runTest test))

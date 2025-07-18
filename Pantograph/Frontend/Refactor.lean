@@ -14,7 +14,7 @@ structure Command where
   hasError : Bool := false
   isSearchTarget : Bool := false
   constants : NameSet := .empty
-  deriving Inhabited
+  state : Elab.Command.State
 
 inductive CommandCategory where
   -- Definition of data
@@ -48,6 +48,21 @@ protected def Command.category (command : Command) : CommandCategory :=
     => .auxiliary
   | _ => .unknown
 
+@[inline] def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : FrontendM α := do
+  let config ← read
+  let ctx ← readThe Elab.Frontend.Context
+  let s ← get
+  let cmdCtx : Elab.Command.Context := {
+    cmdPos       := s.cmdPos
+    fileName     := ctx.inputCtx.fileName
+    fileMap      := ctx.inputCtx.fileMap
+    snap?        := none
+    cancelTk?    := config.cancelTk?
+  }
+  match (← liftM <| EIO.toIO' <| (x cmdCtx).run command.state) with
+  | Except.error e      => throw <| IO.Error.userError s!"unexpected internal error: {← e.toMessageData.toString}"
+  | Except.ok (a, sNew) => Elab.Frontend.setCommandState sNew; return a
+
 namespace Refactor
 
 structure Context where
@@ -60,9 +75,8 @@ structure State where
 
 abbrev RefactorM := ReaderT Context $ StateRefT State FrontendM
 
-end Refactor
-
-export Refactor (RefactorM)
+def fail { α } (s : String) : IO α :=
+  throw <| .userError s
 
 def constantDependencies (env : Environment) (name : Name) : NameSet :=
   let const := env.find? name |>.get!
@@ -85,11 +99,13 @@ def preprocessRefactor : RefactorM Unit := executeFrontend λ step => unsafe do
   let constants ← collectNewDefinedConstants step
   let dependencies := constants.fold (init := NameSet.empty) λ acc c =>
     acc.union $ constantDependencies step.after c
+  let commandState := (← getThe Elab.Frontend.State).commandState
   let unit := if step.msgs.any (·.severity == .error) then
       {
         hasError := true,
         stx := step.stx,
         trees := step.trees,
+        state := commandState,
       }
     else
       {
@@ -98,6 +114,7 @@ def preprocessRefactor : RefactorM Unit := executeFrontend λ step => unsafe do
         dependencies,
         isSearchTarget := hasSorry step,
         constants,
+        state := commandState,
       }
   modify λ state =>
     {
@@ -105,25 +122,56 @@ def preprocessRefactor : RefactorM Unit := executeFrontend λ step => unsafe do
     }
 
 /-- Fold `sorry`s into one definition -/
-def foldTheorems (commands : List Command) : ExceptT String FrontendM Syntax := do
-  sorry
+def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
+  -- Format the head condition into the format `x : T`
+  let (headName, witness) ← head.runCommandElabM do
+    Elab.Command.liftCoreM do
+      let env := head.state.env
+      let name := head.constants.toList.head!
+      let t := env.find? name |>.get!
+      let .str _ binder := name | Refactor.fail "Name is not a .str"
+      return (binder, ← Meta.ppExpr t.type |>.run')
+  let companions ← tail.mapM λ command => command.runCommandElabM do
+    Elab.Command.liftCoreM do
+      let env := command.state.env
+      let name := command.constants.toList.head!
+      let t := env.find? name |>.get!
+      return s!"{← Meta.ppExpr t.type |>.run'}"
+  let companions := match companions with
+    | [a] => a
+    | _ => " ∧ ".intercalate $ companions.map λ c => s!"({c})"
+  let assembly := s!"def {headName}_composite : Σ' {headName} : {witness}, {companions} := sorry"
+  return format assembly
 
 /-- Scroll one unit down from the top -/
-def collectNextCommand : ExceptT String RefactorM Syntax := do
+def collectNextCommand : RefactorM Format := do
   let { commands, .. } ← get
-  let decl := commands.head!
+  let decl :: commands := commands | Refactor.fail "No commands left"
   if !decl.isSearchTarget then
-    return decl.stx
-  let (series, commands) ← (λ (z : StateT NameSet (Except String) _) => z.run' .empty) $
-    commands.partitionM λ unit => do
-      let deps ← get
-      if unit.constants.any (deps.contains ·) then
-        set $ unit.constants.fold (init := deps) λ acc n => acc.insert n
+    return format decl.stx
+  -- This keeps track of two `NameSet`s. If the dependency structure is
+  -- non-flat, we cannot refactor this.
+  let ((series, commands), (_, _, isNonFlat)) := (λ (z : StateM (NameSet × NameSet × Bool) _) => z.run (decl.constants, {}, false)) $
+    commands.partitionM λ command => do
+      let (headDeps, innerDeps, isNonFlat) ← get
+      if command.dependencies.any (innerDeps.contains ·) then
+        let innerDeps := command.constants.fold (init := innerDeps) λ acc n => acc.insert n
+        set (headDeps, innerDeps, true)
+        return true
+      if command.dependencies.any (headDeps.contains ·) then
+        let innerDeps := command.constants.fold (init := innerDeps) λ acc n => acc.insert n
+        set (headDeps, innerDeps, isNonFlat)
         return true
       else
         return false
   if series.isEmpty then
-    return decl.stx
+    return format decl.stx
   -- `series` should then be rolled into a single declaration
   modify ({ · with commands })
-  return decl.stx
+  if isNonFlat then
+    Refactor.fail "Cannot refactor non-flat dependency structure"
+  foldTheoremsFlat decl series
+
+end Refactor
+
+export Refactor (RefactorM)

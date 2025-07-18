@@ -132,7 +132,9 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
   : IO String := do
   let space := String.join $ List.replicate indent "  "
   match t with
-  | .context ctx t => t.toString (ctx.mergeIntoOuter? ctx?)
+  | .context ctx t =>
+    let s ← t.toString (ctx.mergeIntoOuter? ctx?)
+    pure s!"[context] {s}"
   | .node info children =>
     if let some ctx := ctx? then
       let node : String ← match info with
