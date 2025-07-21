@@ -47,6 +47,10 @@ protected def Command.category (command : Command) : CommandCategory :=
   | `Lean.Parser.Command.set_option
     => .auxiliary
   | _ => .unknown
+protected def Command.comments (command : Command) : Syntax :=
+  let modifiers := command.stx.getArg 0
+  let comments := modifiers.getArg 0
+  comments
 
 @[inline] def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : FrontendM α := do
   let config ← read
