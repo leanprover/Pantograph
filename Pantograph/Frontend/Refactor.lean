@@ -132,8 +132,11 @@ private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Exp
     let r ← mkProdElem combine xs
     Meta.mkAppM combine #[x, r]
 
+private def mkDocComment (s : String) :=
+  mkNode ``Parser.Command.docComment #[mkAtom "/--", mkAtom s, mkAtom "-/"]
+
 /-- Fold `sorry`s into one definition -/
-def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.Command := do
+def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
   let (headName, witness) ← head.runCommandElabM do
     Elab.Command.liftCoreM do
       let env := head.state.env
@@ -147,6 +150,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.C
       let info := env.find? name |>.get!
       let c ← mkConstWithLevelParams headName
       Meta.kabstract info.type c
+  -- Concatenate all comments
   let allDocs := "\n".intercalate $ (head :: tail).map λ command =>
     let `(docComment|$comment) := command.comments
     comment.getDocString
@@ -164,15 +168,16 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.C
       withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
         PrettyPrinter.delab target
     let theoremIdent := mkIdent (.str .anonymous s!"{binderName}_composite")
-    let `(docComment|$comment) := head.comments
-    `(command|$comment:docComment def $theoremIdent : $target := sorry)
+    let comment := mkDocComment allDocs
+    let command ← `(command|$comment:docComment def $theoremIdent : $target := sorry)
+    return command.raw.prettyPrint
 
 /-- Scroll one unit down from the top -/
-def collectNextCommand : RefactorM Syntax.Command := do
+def collectNextCommand : RefactorM Format := do
   let { commands, .. } ← get
   let decl :: commands := commands | Refactor.fail "No commands left"
   if !decl.isSearchTarget then
-    return ⟨decl.stx⟩
+    return format decl.stx
   -- This keeps track of two `NameSet`s. If the dependency structure is
   -- non-flat, we cannot refactor this.
   let ((series, commands), (_, _, isNonFlat)) := (λ (z : StateM (NameSet × NameSet × Bool) _) => z.run (decl.constants, {}, false)) $
@@ -189,7 +194,7 @@ def collectNextCommand : RefactorM Syntax.Command := do
       else
         return false
   if series.isEmpty then
-    return ⟨decl.stx⟩
+    return format decl.stx
   -- `series` should then be rolled into a single declaration
   modify ({ · with commands })
   if isNonFlat then
@@ -208,7 +213,7 @@ def runRefactor (env : Environment) (source: String) (rContext : Refactor.Contex
     let mut result := Format.nil
     while !(← get).commands.isEmpty do
       let command ← collectNextCommand
-      result := result ++ Format.line ++ (command : Syntax).prettyPrint
+      result := result ++ Format.line ++ command
     return result.pretty
   m.run rContext |>.run' {}
     |>.run {}
