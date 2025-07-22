@@ -16,7 +16,7 @@ def dissect (args : List String) : IO UInt32 := do
   let (context, state) ← do Frontend.createContextStateFromFile file fileName (env? := .none) {}
   let frontendM: Frontend.FrontendM _ :=
     Frontend.mapCompilationSteps λ step => do
-      IO.println s!"{step.stx.prettyPrint}"
+      IO.println s!"{step.stx}"
       IO.println s!"🐈 {step.stx.getKind.toString}"
       for (tree, i) in step.trees.zipIdx do
         IO.println s!"🌲[{i}] {← tree.toString}"

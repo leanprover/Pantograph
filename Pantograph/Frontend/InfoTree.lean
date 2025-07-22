@@ -144,7 +144,11 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
         let head := match info.stx.getArg 1 with
           | .missing => ""
           | other => s!" {other.getKind.toString}"
-        pure s!"[command/{info.stx.getKind.toString}{head}] {info.stx.prettyPrint}"
+        let s := if options.prettyPrint then
+            info.stx.prettyPrint
+          else
+            s!"{info.stx}"
+        pure s!"[command/{info.stx.getKind.toString}{head}] {s}"
       | .ofTacticInfo  info => pure s!"[tactic] {info.stx.prettyPrint}"
       | .ofMacroExpansionInfo _ => pure "[macro_exp]"
       | .ofOptionInfo info => pure s!"[option] {info.stx.prettyPrint}"

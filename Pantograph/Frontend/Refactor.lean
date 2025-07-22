@@ -125,34 +125,50 @@ def preprocessRefactor : RefactorM Unit := executeFrontend λ step => unsafe do
       commands := state.commands.append [unit],
     }
 
+private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Expr
+  | .nil => return .const `Unit []
+  | [a] => return a
+  | x :: xs => do
+    let r ← mkProdElem combine xs
+    Meta.mkAppM combine #[x, r]
+
 /-- Fold `sorry`s into one definition -/
-def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
-  -- Format the head condition into the format `x : T`
+def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.Command := do
   let (headName, witness) ← head.runCommandElabM do
     Elab.Command.liftCoreM do
       let env := head.state.env
       let name := head.constants.toList.head!
       let t := env.find? name |>.get!
-      let .str _ binder := name | Refactor.fail "Name is not a .str"
-      return (binder, ← Meta.ppExpr t.type |>.run')
+      return (name, t.type)
   let companions ← tail.mapM λ command => command.runCommandElabM do
-    Elab.Command.liftCoreM do
+    Elab.Command.liftTermElabM do
       let env := command.state.env
       let name := command.constants.toList.head!
-      let t := env.find? name |>.get!
-      return s!"{← Meta.ppExpr t.type |>.run'}"
-  let companions := match companions with
-    | [a] => a
-    | _ => " ∧ ".intercalate $ companions.map λ c => s!"({c})"
-  let assembly := s!"def {headName}_composite : Σ' {headName} : {witness}, {companions} := sorry"
-  return format assembly
+      let info := env.find? name |>.get!
+      let c ← mkConstWithLevelParams headName
+      Meta.kabstract info.type c
+  let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
+  -- Under the environment of `head`, construct the companion type
+  head.runCommandElabM do
+    let target ← Elab.Command.liftTermElabM do
+      -- Construct the companion
+      let companion ← Meta.withLocalDeclD `binderName witness λ binder => do
+        let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
+        Meta.mkLambdaFVars #[binder] companion
+      let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
+      Meta.check target
+      -- Delaborate this back into syntax
+      withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
+        PrettyPrinter.delab target
+    let theoremIdent := mkIdent (.str .anonymous s!"{binderName}_composite")
+    `(command|def $theoremIdent : $target := sorry)
 
 /-- Scroll one unit down from the top -/
-def collectNextCommand : RefactorM Format := do
+def collectNextCommand : RefactorM Syntax.Command := do
   let { commands, .. } ← get
   let decl :: commands := commands | Refactor.fail "No commands left"
   if !decl.isSearchTarget then
-    return format decl.stx
+    return ⟨decl.stx⟩
   -- This keeps track of two `NameSet`s. If the dependency structure is
   -- non-flat, we cannot refactor this.
   let ((series, commands), (_, _, isNonFlat)) := (λ (z : StateM (NameSet × NameSet × Bool) _) => z.run (decl.constants, {}, false)) $
@@ -169,7 +185,7 @@ def collectNextCommand : RefactorM Format := do
       else
         return false
   if series.isEmpty then
-    return format decl.stx
+    return ⟨decl.stx⟩
   -- `series` should then be rolled into a single declaration
   modify ({ · with commands })
   if isNonFlat then
@@ -187,9 +203,9 @@ def runRefactor (env : Environment) (source: String) (rContext : Refactor.Contex
     preprocessRefactor
     let mut result := Format.nil
     while !(← get).commands.isEmpty do
-      let f ← collectNextCommand
-      result := result ++ Format.line ++ f
-    return toString result
+      let command ← collectNextCommand
+      result := result ++ Format.line ++ (command : Syntax).prettyPrint
+    return result.pretty
   m.run rContext |>.run' {}
     |>.run {}
     |>.run fContext |>.run' fState
