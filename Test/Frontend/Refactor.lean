@@ -18,7 +18,8 @@ def f : Nat → Nat := sorry
 theorem mystery (n : Nat) : f n = n := sorry
   "
   let expected := "
-def f_composite : Σ' f : Nat → Nat, ∀ (n : Nat), f n = n := sorry
+/-- S1 -/
+ def  f_composite  :  {  binderName  :  Nat  →  Nat  //  ∀  (  n  :  Nat  )  ,  binderName  n   =   n  }  :=  sorry
   ".trim
   let result ← runRefactor env src
   checkEq "result" result.trim expected

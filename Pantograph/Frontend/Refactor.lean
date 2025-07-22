@@ -147,6 +147,9 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.C
       let info := env.find? name |>.get!
       let c ← mkConstWithLevelParams headName
       Meta.kabstract info.type c
+  let allDocs := "\n".intercalate $ (head :: tail).map λ command =>
+    let `(docComment|$comment) := command.comments
+    comment.getDocString
   let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
   -- Under the environment of `head`, construct the companion type
   head.runCommandElabM do
@@ -161,7 +164,8 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.C
       withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
         PrettyPrinter.delab target
     let theoremIdent := mkIdent (.str .anonymous s!"{binderName}_composite")
-    `(command|def $theoremIdent : $target := sorry)
+    let `(docComment|$comment) := head.comments
+    `(command|$comment:docComment def $theoremIdent : $target := sorry)
 
 /-- Scroll one unit down from the top -/
 def collectNextCommand : RefactorM Syntax.Command := do
