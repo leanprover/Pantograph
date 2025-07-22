@@ -160,7 +160,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
   head.runCommandElabM do
     let target ← Elab.Command.liftTermElabM do
       -- Construct the companion
-      let companion ← Meta.withLocalDeclD `binderName witness λ binder => do
+      let companion ← Meta.withLocalDeclD (Name.mkSimple binderName) witness λ binder => do
         let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
         Meta.mkLambdaFVars #[binder] companion
       let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
@@ -168,7 +168,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       -- Delaborate this back into syntax
       withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
         PrettyPrinter.delab target
-    let theoremIdent := mkIdent (.str .anonymous s!"{binderName}_composite")
+    let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
     let command ← if allDocs.isEmpty then
         `(command|def $theoremIdent : $target := sorry)
       else
