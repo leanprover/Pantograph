@@ -50,7 +50,7 @@ protected def Command.category (command : Command) : CommandCategory :=
 protected def Command.comments (command : Command) : Syntax :=
   let modifiers := command.stx.getArg 0
   let comments := modifiers.getArg 0
-  comments
+  comments[0]
 
 @[inline] def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : FrontendM α := do
   let config ← read
@@ -133,7 +133,7 @@ private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Exp
     Meta.mkAppM combine #[x, r]
 
 private def mkDocComment (s : String) :=
-  mkNode ``Parser.Command.docComment #[mkAtom "/--", mkAtom s, mkAtom "-/"]
+  mkNode ``Parser.Command.docComment #[mkAtom "/--", mkAtom s!"{s} -/"]
 
 /-- Fold `sorry`s into one definition -/
 def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
@@ -151,9 +151,10 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       let c ← mkConstWithLevelParams headName
       Meta.kabstract info.type c
   -- Concatenate all comments
-  let allDocs := "\n".intercalate $ (head :: tail).map λ command =>
+  let allDocs := "\n".intercalate $ (head :: tail).filterMap λ command =>
     let `(docComment|$comment) := command.comments
-    comment.getDocString
+    let s := comment.getDocString
+    if s.isEmpty then .none else s
   let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
   -- Under the environment of `head`, construct the companion type
   head.runCommandElabM do
@@ -168,9 +169,13 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
         PrettyPrinter.delab target
     let theoremIdent := mkIdent (.str .anonymous s!"{binderName}_composite")
-    let comment := mkDocComment allDocs
-    let command ← `(command|$comment:docComment def $theoremIdent : $target := sorry)
-    return command.raw.prettyPrint
+    let command ← if allDocs.isEmpty then
+        `(command|def $theoremIdent : $target := sorry)
+      else
+        let comment := mkDocComment allDocs
+        `(command|$comment:docComment def $theoremIdent : $target := sorry)
+    Elab.Command.liftCoreM do
+      PrettyPrinter.formatCommand command
 
 /-- Scroll one unit down from the top -/
 def collectNextCommand : RefactorM Format := do
