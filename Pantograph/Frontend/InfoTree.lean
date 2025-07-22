@@ -1,5 +1,6 @@
 /- Adapted from lean-training-data -/
 import Lean.Elab.InfoTree
+import Lean.Elab.Util
 import Lean.Parser.Term
 import Lean.PrettyPrinter
 
@@ -10,7 +11,6 @@ namespace Lean.Elab
 private def elaboratorToString : Name → String
   | .anonymous => ""
   | n => s!"⟨{n}⟩ "
-private def indent (s : String) : String := "\n".intercalate $ s.splitOn "\n" |>.map ("  " ++ .)
 
 /-- The `Syntax` for a `Lean.Elab.Info`, if there is one. -/
 protected def Info.stx? : Info → Option Syntax
@@ -124,20 +124,36 @@ partial def InfoTree.findAllInfoM [Monad m]
     return head ++ (← tail).flatten
   | _ => return []
 
+structure InfoTreePrintOptions where
+  prettyPrint : Bool := true
+
 @[export pantograph_infotree_to_string_m]
-partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .none) : IO String := do
+partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .none) (options : InfoTreePrintOptions := {}) (indent : Nat := 0)
+  : IO String := do
+  let space := String.join $ List.replicate indent "  "
   match t with
-  | .context ctx t => t.toString (ctx.mergeIntoOuter? ctx?)
+  | .context ctx t =>
+    let s ← t.toString (ctx.mergeIntoOuter? ctx?)
+    pure s!"[context] {s}"
   | .node info children =>
     if let some ctx := ctx? then
       let node : String ← match info with
-      | .ofTermInfo    info => pure s!"[term] {info.stx}"
-      | .ofCommandInfo info => pure s!"[command] {info.stx}"
-      | .ofTacticInfo  info => pure s!"[tactic] {info.stx}"
+      | .ofTermInfo { stx, expr, .. } =>
+        pure s!"[term] {stx.prettyPrint} ➡ {expr}"
+      | .ofCommandInfo info =>
+        let head := match info.stx.getArg 1 with
+          | .missing => ""
+          | other => s!" {other.getKind.toString}"
+        let s := if options.prettyPrint then
+            info.stx.prettyPrint
+          else
+            s!"{info.stx}"
+        pure s!"[command/{info.stx.getKind.toString}{head}] {s}"
+      | .ofTacticInfo  info => pure s!"[tactic] {info.stx.prettyPrint}"
       | .ofMacroExpansionInfo _ => pure "[macro_exp]"
-      | .ofOptionInfo info => pure s!"[option] {info.stx}"
+      | .ofOptionInfo info => pure s!"[option] {info.stx.prettyPrint}"
       | .ofFieldInfo _ => pure "[field]"
-      | .ofCompletionInfo info => pure s!"[completion] {info.stx}"
+      | .ofCompletionInfo info => pure s!"[completion] {info.stx.prettyPrint}"
       | .ofUserWidgetInfo _ => pure "[user_widget]"
       | .ofCustomInfo _ => pure "[custom]"
       | .ofFVarAliasInfo _ => pure "[fvar_alias]"
@@ -145,13 +161,15 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
       | .ofChoiceInfo _ => pure "[choice]"
       | .ofPartialTermInfo  _ => pure "[partial_term]"
       | .ofDelabTermInfo _ => pure "[delab_term]"
-      let children := "\n".intercalate (← children.toList.mapM λ t' => do pure $ indent $ ← t'.toString ctx)
-      return s!"{node}\n{children}"
+      let children ← children.toList.mapM λ t' => do
+        t'.toString ctx options (indent := indent + 1)
+      let children := String.join children
+      return s!"{space}{node}\n{children}"
     else throw <| IO.userError "No `ContextInfo` available."
   | .hole mvarId =>
     if let some ctx := ctx? then
       let payload := (← ctx.runMetaM {} (do Meta.ppGoal mvarId)).pretty
-      return s!"[hole] {payload}"
+      return s!"{space}[hole] {payload}"
     else throw <| IO.userError "No `ContextInfo` available."
 
 end Lean.Elab

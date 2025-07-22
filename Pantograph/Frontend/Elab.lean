@@ -53,9 +53,6 @@ protected def goalState (t : TacticInvocation) : IO (List Format) := do
 protected def goalStateAfter (t : TacticInvocation) : IO (List Format) := do
   t.runMetaMGoalsAfter (fun gs => gs.mapM fun g => do Meta.ppGoal g)
 
-protected def ppExpr (t : TacticInvocation) (e : Expr) : IO Format :=
-  t.runMetaM (fun _ => do Meta.ppExpr (← instantiateMVars e))
-
 protected def usedConstants (t: TacticInvocation) : NameSet :=
   let info := t.info
   info.goalsBefore
@@ -180,18 +177,19 @@ def sorrysToGoalState (sorrys : List InfoWithContext) : MetaM AnnotatedGoalState
   let state ← GoalState.createFromMVars goals root
   return { state, srcBoundaries }
 
-
 @[export pantograph_frontend_collect_new_defined_constants_m]
-def collectNewDefinedConstants (step : CompilationStep) : IO (List Name) := do
-  step.after.constants.map₂.foldlM (λ acc name _ => do
+def collectNewDefinedConstants (step : CompilationStep) : IO NameSet := do
+  step.after.constants.map₂.foldlM (init := .empty) λ acc name _ => do
     if step.before.contains name then
       return acc
     let coreM : CoreM Bool := Option.isSome <$> findDeclarationRanges? name
-    let hasRange ← coreM.run' { fileName := step.fileName, fileMap := step.fileMap } { env := step.after } |>.toBaseIO
+    let hasRange ← coreM.run'
+      { fileName := step.fileName, fileMap := step.fileMap }
+      { env := step.after }
+      |>.toBaseIO
     match hasRange with
-    | .ok true => return name :: acc
+    | .ok true => return acc.insert name
     | .ok false => return acc
     | .error e => throw $ IO.userError (← e.toMessageData.toString)
-    ) []
 
 end Pantograph.Frontend
