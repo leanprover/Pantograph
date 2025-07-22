@@ -52,7 +52,8 @@ protected def Command.comments (command : Command) : Syntax :=
   let comments := modifiers.getArg 0
   comments[0]
 
-@[inline] def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : FrontendM α := do
+@[inline] protected
+def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : FrontendM α := do
   let config ← read
   let ctx ← readThe Elab.Frontend.Context
   let s ← get
@@ -66,6 +67,9 @@ protected def Command.comments (command : Command) : Syntax :=
   match (← liftM <| EIO.toIO' <| (x cmdCtx).run command.state) with
   | Except.error e      => throw <| IO.Error.userError s!"unexpected internal error: {← e.toMessageData.toString}"
   | Except.ok (a, sNew) => Elab.Frontend.setCommandState sNew; return a
+@[inline] protected
+def Command.runCoreM { α } (command : Command) (c : CoreM α) : FrontendM α :=
+  command.runCommandElabM $ Elab.Command.liftCoreM c
 
 namespace Refactor
 
@@ -181,8 +185,10 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
 def collectNextCommand : RefactorM Format := do
   let { commands, .. } ← get
   let decl :: commands := commands | Refactor.fail "No commands left"
+  modify ({ · with commands }) -- Prevents infinite loop
+
   if !decl.isSearchTarget then
-    return format decl.stx
+    return ← decl.runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
   -- This keeps track of two `NameSet`s. If the dependency structure is
   -- non-flat, we cannot refactor this.
   let ((series, commands), (_, _, isNonFlat)) := (λ (z : StateM (NameSet × NameSet × Bool) _) => z.run (decl.constants, {}, false)) $
@@ -199,12 +205,14 @@ def collectNextCommand : RefactorM Format := do
       else
         return false
   if series.isEmpty then
-    return format decl.stx
+    return ← decl.runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
   -- `series` should then be rolled into a single declaration
   modify ({ · with commands })
   if isNonFlat then
     Refactor.fail "Cannot refactor non-flat dependency structure"
   foldTheoremsFlat decl series
+
+def messageHasError := "File has error!"
 
 end Refactor
 
@@ -215,6 +223,8 @@ def runRefactor (env : Environment) (source: String) (rContext : Refactor.Contex
   let (fContext, fState) ← createContextStateFromFile source filename env {}
   let m : RefactorM _ := do
     preprocessRefactor
+    if (← get).commands.any (·.hasError) then
+      throw $ IO.userError messageHasError
     let mut result := Format.nil
     while !(← get).commands.isEmpty do
       let command ← collectNextCommand

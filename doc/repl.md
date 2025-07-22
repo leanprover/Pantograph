@@ -135,7 +135,8 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   Warning: Behaviour is unstable in case of multiple `sorry`s. Use the draft
   tactic if possible.
 * [Experimental] `frontend.refactor { "file": <str> }`: Group dependent `sorry`s
-  into one single `sorry`.
+  into one single `sorry`. Currently only flat dependencies are supported (i.e.
+  an object with a list of properties).
 
 ## Options
 
