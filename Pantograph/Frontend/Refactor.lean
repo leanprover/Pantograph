@@ -2,6 +2,7 @@
 on one end and outputs compilation units on the other. -/
 import Pantograph.Frontend.Basic
 import Pantograph.Frontend.Elab
+import Pantograph.Delate
 
 open Lean
 
@@ -145,15 +146,16 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     Elab.Command.liftCoreM do
       let env := head.state.env
       let name := head.constants.toList.head!
-      let t := env.find? name |>.get!
-      return (name, t.type)
+      let info := env.find? name |>.get!
+      return (name, ← normalize info.type)
   let companions ← tail.mapM λ command => command.runCommandElabM do
     Elab.Command.liftTermElabM do
       let env := command.state.env
       let name := command.constants.toList.head!
       let info := env.find? name |>.get!
+      let type ← normalize info.type
       let c ← mkConstWithLevelParams headName
-      Meta.kabstract info.type c
+      Meta.kabstract type c
   -- Concatenate all comments
   let allDocs := "\n".intercalate $ (head :: tail).filterMap λ command =>
     let `(docComment|$comment) := command.comments
@@ -180,6 +182,9 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
         `(command|$comment:docComment def $theoremIdent : $target := sorry)
     Elab.Command.liftCoreM do
       PrettyPrinter.formatCommand command
+  where
+  normalize (e : Expr) : CoreM Expr := do
+    unfoldAuxLemmas $ ← unfoldMatchers e
 
 /-- Scroll one unit down from the top -/
 def collectNextCommand : RefactorM Format := do
