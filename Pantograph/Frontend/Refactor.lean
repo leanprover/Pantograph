@@ -175,11 +175,8 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
         PrettyPrinter.delab target
     let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
-    let command ← if allDocs.isEmpty then
-        `(command|def $theoremIdent : $target := sorry)
-      else
-        let comment := mkDocComment allDocs
-        `(command|$comment:docComment def $theoremIdent : $target := sorry)
+    let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs
+    let command ← `(command|$[$comment?:docComment]? def $theoremIdent : $target := sorry)
     Elab.Command.liftCoreM do
       PrettyPrinter.formatCommand command
   where
