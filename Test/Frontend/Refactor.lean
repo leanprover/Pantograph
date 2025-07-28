@@ -52,10 +52,26 @@ theorem mystery (n : Nat) , f n = n := sorry
   catch ex : IO.Error =>
     checkEq "error" ex.toString Refactor.messageHasError
 
+private def test_intercalating : Test := λ env ↦ do
+  let src := "
+def f : Nat → Nat := sorry
+def helper (n : Nat) : Nat := n + 1
+theorem mystery (n : Nat) : f n = helper n := sorry
+  "
+  let expected := "
+def helper (n : Nat) : Nat :=
+  n + 1
+def f_composite : { f : Nat → Nat // ∀ (n : Nat), f n = helper n } :=
+  sorry
+  ".trim
+  let result ← runRefactor env src
+  checkEq "result" result.trim expected
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("id", test_id),
     ("simple", test_simple),
     ("invalid", test_invalid),
+    ("intercalating", test_intercalating),
   ]
   tests.map λ (name, test) => (name, runTest $ test env)
