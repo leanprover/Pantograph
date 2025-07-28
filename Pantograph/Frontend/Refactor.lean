@@ -56,9 +56,12 @@ protected def Command.comments (command : Command) : Syntax :=
   let comments := modifiers.getArg 0
   comments[0]
 
+structure Config where
+  deriving Inhabited
+
 structure Context where
   inContext : Parser.InputContext
-  deriving Inhabited
+  config : Config
 
 structure State where
   outContext : Parser.InputContext
@@ -274,7 +277,7 @@ def messageHasError := "File has error!"
 end Refactor
 
 open Refactor in
-def runRefactor (env : Environment) (source : String) : IO String := do
+def runRefactor (env : Environment) (source : String) (config : Refactor.Config := {}) : IO String := do
   let filename := "<anonymous>"
   let (fContext, fState) ← createContextStateFromFile source filename env {}
   let commands ← preprocessRefactor.run {} |>.run fContext |>.run' fState
@@ -294,7 +297,7 @@ def runRefactor (env : Environment) (source : String) : IO String := do
     parserState,
     cmdPos := parserState.pos,
   }
-  let (_, state) ← m.run { inContext := fContext.inputCtx }
+  let (_, state) ← m.run { config, inContext := fContext.inputCtx }
     |>.run { outContext, outState, commands }
   return state.outContext.input
 
