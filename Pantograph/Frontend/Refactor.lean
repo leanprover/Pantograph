@@ -8,6 +8,8 @@ open Lean
 
 namespace Pantograph.Frontend
 
+namespace Refactor
+
 structure Command where
   dependencies : NameSet := .empty
   stx : Syntax
@@ -53,39 +55,68 @@ protected def Command.comments (command : Command) : Syntax :=
   let comments := modifiers.getArg 0
   comments[0]
 
-@[inline] protected
-def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : FrontendM α := do
-  let config ← read
-  let ctx ← readThe Elab.Frontend.Context
-  let s ← get
-  let cmdCtx : Elab.Command.Context := {
-    cmdPos       := s.cmdPos
-    fileName     := ctx.inputCtx.fileName
-    fileMap      := ctx.inputCtx.fileMap
-    snap?        := none
-    cancelTk?    := config.cancelTk?
-  }
-  match (← liftM <| EIO.toIO' <| (x cmdCtx).run command.state) with
-  | Except.error e      => throw <| IO.Error.userError s!"unexpected internal error: {← e.toMessageData.toString}"
-  | Except.ok (a, sNew) => Elab.Frontend.setCommandState sNew; return a
-@[inline] protected
-def Command.runCoreM { α } (command : Command) (c : CoreM α) : FrontendM α :=
-  command.runCommandElabM $ Elab.Command.liftCoreM c
-
-namespace Refactor
-
 structure Context where
+  inContext : Parser.InputContext
   deriving Inhabited
 
 structure State where
-  -- Collected top-level units
-  commands : List Command := []
-  deriving Inhabited
+  outContext : Parser.InputContext
+  outState : Elab.Frontend.State
 
-abbrev RefactorM := ReaderT Context $ StateRefT State FrontendM
+  -- Collected top-level units, scrolling
+  commands : List Command := []
+
+/-- Two monads rolled into one -/
+abbrev RefactorM := ReaderT Context $ StateRefT State IO
 
 def fail { α } (s : String) : IO α :=
   throw <| .userError s
+
+/-- Add one command to the refactored file -/
+def pushNewCommand (command : Format) : RefactorM Unit := do
+  modify λ state =>
+    let src := state.outContext.input ++ "\n" ++ command.pretty
+    let positions := state.outContext.fileMap.positions.push src.endPos
+    {
+      state with outContext := {
+        state.outContext with
+        input := src,
+        fileMap := {
+          source := src,
+          positions,
+        }
+      }
+    }
+  -- After modification, run the parser ahead by one position
+  let { outContext := inputCtx, outState, .. } ← get
+  let (_end, outState) ← Elab.Frontend.processCommand.run { inputCtx } |>.run outState
+  modify ({ · with outState })
+
+/-- Run `FrontendM` at the tail of the out file -/
+def liftFrontend { α } (x : FrontendM α) : RefactorM α := do
+  let { outContext := inputCtx, outState, .. } ← get
+  x.run {} |>.run { inputCtx } |>.run' outState
+def runCoreM { α } (x : CoreM α) : RefactorM α := do
+  liftFrontend $ runCommandElabM $ Elab.Command.liftCoreM x
+
+
+/-- runs a "frozen" `CommandElabM` that can't modify anything. -/
+@[inline] protected
+def Command.runCommandElabM (command : Command) (x : Elab.Command.CommandElabM α) : RefactorM α := do
+  let inputCtx := (← read).inContext
+  let cmdCtx : Elab.Command.Context := {
+    fileName     := inputCtx.fileName
+    fileMap      := inputCtx.fileMap
+    snap?        := none,
+    cancelTk?    := .none,
+  }
+  match (← liftM <| EIO.toIO' <| (x cmdCtx).run command.state) with
+  | Except.error e      => throw <| IO.Error.userError s!"unexpected internal error: {← e.toMessageData.toString}"
+  | Except.ok (a, _sNew) => return a
+
+@[inline] protected
+def Command.runCoreM { α } (command : Command) (c : CoreM α) : RefactorM α :=
+  command.runCommandElabM $ Elab.Command.liftCoreM c
 
 def constantDependencies (env : Environment) (name : Name) : NameSet :=
   let const := env.find? name |>.get!
@@ -103,8 +134,8 @@ def hasSorry (step : CompilationStep) : Bool :=
       | _ => false
     !nodes.isEmpty
 
-/-- Scroll to the end of the file, ingesting all compilation units in the process  -/
-def preprocessRefactor : RefactorM Unit := executeFrontend λ step => unsafe do
+/-- Scroll to the end of the file, reading all compilation units in the process  -/
+def preprocessRefactor : FrontendM (List Command) := mapCompilationSteps λ step => do
   let constants ← collectNewDefinedConstants step
   let dependencies := constants.fold (init := NameSet.empty) λ acc c =>
     acc.union $ constantDependencies step.after c
@@ -125,10 +156,7 @@ def preprocessRefactor : RefactorM Unit := executeFrontend λ step => unsafe do
         constants,
         state := commandState,
       }
-  modify λ state =>
-    {
-      commands := state.commands.append [unit],
-    }
+  return unit
 
 private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Expr
   | .nil => return .const `Unit []
@@ -163,7 +191,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     if s.isEmpty then .none else s
   let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
   -- Under the environment of `head`, construct the companion type
-  head.runCommandElabM do
+  liftFrontend <| runCommandElabM do
     let target ← Elab.Command.liftTermElabM do
       -- Construct the companion
       let companion ← Meta.withLocalDeclD (Name.mkSimple binderName) witness λ binder => do
@@ -184,13 +212,16 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     unfoldAuxLemmas $ ← unfoldMatchers e
 
 /-- Scroll one unit down from the top -/
-def collectNextCommand : RefactorM Format := do
+def collectNextCommand : RefactorM Unit := do
   let { commands, .. } ← get
   let decl :: commands := commands | Refactor.fail "No commands left"
   modify ({ · with commands }) -- Prevents infinite loop
 
   if !decl.isSearchTarget then
-    return ← decl.runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
+    let f ← runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
+    pushNewCommand f
+    return
+
   -- This keeps track of two `NameSet`s. If the dependency structure is
   -- non-flat, we cannot refactor this.
   let ((series, commands), (_, _, isNonFlat)) := (λ (z : StateM (NameSet × NameSet × Bool) _) => z.run (decl.constants, {}, false)) $
@@ -207,33 +238,43 @@ def collectNextCommand : RefactorM Format := do
       else
         return false
   if series.isEmpty then
-    return ← decl.runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
+    let f ← runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
+    pushNewCommand f
+    return
   -- `series` should then be rolled into a single declaration
   modify ({ · with commands })
   if isNonFlat then
     Refactor.fail "Cannot refactor non-flat dependency structure"
-  foldTheoremsFlat decl series
+  let f ← foldTheoremsFlat decl series
+  pushNewCommand f
 
 def messageHasError := "File has error!"
 
 end Refactor
 
 open Refactor in
-def runRefactor (env : Environment) (source: String) (rContext : Refactor.Context := {})
-  : IO String := do
+def runRefactor (env : Environment) (source : String) : IO String := do
   let filename := "<anonymous>"
   let (fContext, fState) ← createContextStateFromFile source filename env {}
-  let m : RefactorM _ := do
-    preprocessRefactor
-    if (← get).commands.any (·.hasError) then
-      throw $ IO.userError messageHasError
-    let mut result := Format.nil
+  let commands ← preprocessRefactor.run {} |>.run fContext |>.run' fState
+  if commands.any (·.hasError) then
+    throw $ IO.userError messageHasError
+  let m : RefactorM Unit := do
     while !(← get).commands.isEmpty do
-      let command ← collectNextCommand
-      result := result ++ Format.line ++ command
-    return result.pretty
-  m.run rContext |>.run' {}
-    |>.run {}
-    |>.run fContext |>.run' fState
+      collectNextCommand
+  let outContext := {
+    fContext.inputCtx with
+    input := "",
+    fileMap := "".toFileMap,
+  }
+  let parserState := {}
+  let outState := {
+    commandState := Elab.Command.mkState env {} {},
+    parserState,
+    cmdPos := parserState.pos,
+  }
+  let (_, state) ← m.run { inContext := fContext.inputCtx }
+    |>.run { outContext, outState, commands }
+  return state.outContext.input
 
 export Refactor (RefactorM)
