@@ -37,6 +37,23 @@ structure Options where
 
 abbrev OptionsT := ReaderT Options
 
+/-- Set options; See `Options` struct above for meanings -/
+structure OptionsSet where
+  printJsonPretty?: Option Bool := .none
+  printExprPretty?: Option Bool := .none
+  printExprAST?: Option Bool := .none
+  printDependentMVars?: Option Bool := .none
+  noRepeat?: Option Bool := .none
+  printAuxDecls?: Option Bool := .none
+  printImplementationDetailHyps?: Option Bool := .none
+  automaticMode?: Option Bool := .none
+  timeout?: Option Nat := .none
+  deriving Lean.FromJson
+structure OptionsSetResult where
+  deriving Lean.ToJson
+structure OptionsPrint where
+  deriving Lean.FromJson
+
 --- Expression Objects ---
 
 structure BoundExpression where
@@ -220,22 +237,14 @@ structure EnvSaveLoad where
 structure EnvSaveLoadResult where
   deriving Lean.ToJson
 
-/-- Set options; See `Options` struct above for meanings -/
-structure OptionsSet where
-  printJsonPretty?: Option Bool := .none
-  printExprPretty?: Option Bool := .none
-  printExprAST?: Option Bool := .none
-  printDependentMVars?: Option Bool := .none
-  noRepeat?: Option Bool := .none
-  printAuxDecls?: Option Bool := .none
-  printImplementationDetailHyps?: Option Bool := .none
-  automaticMode?: Option Bool := .none
-  timeout?: Option Nat := .none
+structure EnvParse where
+  input : String
+  category : String
   deriving Lean.FromJson
-structure OptionsSetResult where
+structure EnvParseResult where
+  -- Byte boundary for the first syntax element
+  pos : Nat
   deriving Lean.ToJson
-structure OptionsPrint where
-  deriving Lean.FromJson
 
 structure GoalStart where
   -- Only one of the fields below may be populated.
