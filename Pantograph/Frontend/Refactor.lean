@@ -100,6 +100,7 @@ def pushNewCommand (command : Format) : RefactorM Unit := do
 def liftFrontend { α } (x : FrontendM α) : RefactorM α := do
   let { outContext := inputCtx, outState, .. } ← get
   x.run {} |>.run { inputCtx } |>.run' outState
+/-- Run `CoreM` at the tail of the out file -/
 def runCoreM { α } (x : CoreM α) : RefactorM α := do
   liftFrontend $ runCommandElabM $ Elab.Command.liftCoreM x
 
@@ -165,6 +166,7 @@ def preprocessRefactor : FrontendM (List Command) := mapCompilationSteps λ step
       }
   return unit
 
+/-- Creates `combine (combine a[0] a[1]) a[2] ...` -/
 private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Expr
   | .nil => return .const `Unit []
   | [a] => return a
@@ -191,7 +193,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       let type ← normalize info.type
       let c ← mkConstWithLevelParams headName
       Meta.kabstract type c
-  -- Concatenate all comments
+  -- Concatenate all doc comments
   let allDocs := "\n".intercalate $ (head :: tail).filterMap λ command =>
     let `(docComment|$comment) := command.comments
     let s := comment.getDocString
