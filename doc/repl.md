@@ -83,6 +83,10 @@ lake env printenv LEAN_PATH
 See `Pantograph/Protocol.lean` for a description of the parameters and return values in JSON.
 * `reset`: Delete all cached expressions and proof trees
 * `stat`: Display resource usage
+* `options.set { key: value, ... }`: Set one or more options. These are not Lean
+  `CoreM` options; those have to be set via command line arguments.), for
+  options see below.
+* `options.print`: Display the current set of options
 * `expr.echo {"expr": <expr>, "type": <optional expected type>, ["levels": [<levels>]]}`: Determine the
   type of an expression and format it.
 * `env.catalog`: Display a list of all safe Lean symbols in the current environment
@@ -93,10 +97,8 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   current environment to/from a file
 * `env.module_read { "module": <name> }`: Reads a list of symbols from a module
 * `env.describe {}`: Describes the imports and modules in the current environment
-* `options.set { key: value, ... }`: Set one or more options. These are not Lean
-  `CoreM` options; those have to be set via command line arguments.), for
-  options see below.
-* `options.print`: Display the current set of options
+* `env.parse { "input": <input>, "category": <parser-category> }`: Parse a bit
+  of syntax and returns the parser's terminal position.
 * `goal.start {["name": <name>], ["expr": <expr>], ["levels": [<levels>]], ["copyFrom": <symbol>]}`:
   Start a new proof from a given expression or symbol
 * `goal.tactic {"stateId": <id>, ["goalId": <id>], ["autoResume": <bool>], ...}`:
