@@ -285,6 +285,8 @@ def execute (command: Protocol.Command): MainM Json := do
   match command.cmd with
   | "reset"         => run reset
   | "stat"          => run stat
+  | "options.set"   => run options_set
+  | "options.print" => run options_print
   | "expr.echo"     => run expr_echo
   | "env.describe"  => run env_describe
   | "env.module_read" => run env_module_read
@@ -293,8 +295,7 @@ def execute (command: Protocol.Command): MainM Json := do
   | "env.add"       => run env_add
   | "env.save"      => run env_save
   | "env.load"      => run env_load
-  | "options.set"   => run options_set
-  | "options.print" => run options_print
+  | "env.parse"     => run env_parse
   | "goal.start"    => run goal_start
   | "goal.tactic"   => run goal_tactic
   | "goal.continue" => run goal_continue
@@ -321,6 +322,26 @@ def execute (command: Protocol.Command): MainM Json := do
     let state ← getMainState
     let nGoals := state.goalStates.size
     return { nGoals }
+  options_set (args: Protocol.OptionsSet): EMainM Protocol.OptionsSetResult := do
+    let state ← getMainState
+    let options := state.options
+    set { state with
+      options := {
+        -- FIXME: This should be replaced with something more elegant
+        printJsonPretty := args.printJsonPretty?.getD options.printJsonPretty,
+        printExprPretty := args.printExprPretty?.getD options.printExprPretty,
+        printExprAST := args.printExprAST?.getD options.printExprAST,
+        printDependentMVars := args.printDependentMVars?.getD options.printDependentMVars,
+        noRepeat := args.noRepeat?.getD options.noRepeat,
+        printAuxDecls := args.printAuxDecls?.getD options.printAuxDecls,
+        printImplementationDetailHyps := args.printImplementationDetailHyps?.getD options.printImplementationDetailHyps
+        automaticMode := args.automaticMode?.getD options.automaticMode,
+        timeout := args.timeout?.getD options.timeout,
+      }
+    }
+    return {  }
+  options_print (_: Protocol.OptionsPrint): EMainM Protocol.Options := do
+    return (← getMainState).options
   env_describe (args: Protocol.EnvDescribe): EMainM Protocol.EnvDescribeResult := do
     let result ← runCoreM $ Environment.describe args
     return result
@@ -347,26 +368,11 @@ def execute (command: Protocol.Command): MainM Json := do
     let levelNames := (args.levels?.getD #[]).toList.map (·.toName)
     liftExcept $ ← liftTermElabM (levelNames := levelNames) do
       (exprEcho args.expr (expectedType? := args.type?) (options := state.options)).run
-  options_set (args: Protocol.OptionsSet): EMainM Protocol.OptionsSetResult := do
-    let state ← getMainState
-    let options := state.options
-    set { state with
-      options := {
-        -- FIXME: This should be replaced with something more elegant
-        printJsonPretty := args.printJsonPretty?.getD options.printJsonPretty,
-        printExprPretty := args.printExprPretty?.getD options.printExprPretty,
-        printExprAST := args.printExprAST?.getD options.printExprAST,
-        printDependentMVars := args.printDependentMVars?.getD options.printDependentMVars,
-        noRepeat := args.noRepeat?.getD options.noRepeat,
-        printAuxDecls := args.printAuxDecls?.getD options.printAuxDecls,
-        printImplementationDetailHyps := args.printImplementationDetailHyps?.getD options.printImplementationDetailHyps
-        automaticMode := args.automaticMode?.getD options.automaticMode,
-        timeout := args.timeout?.getD options.timeout,
-      }
-    }
-    return {  }
-  options_print (_: Protocol.OptionsPrint): EMainM Protocol.Options := do
-    return (← getMainState).options
+  env_parse (args : Protocol.EnvParse) : EMainM Protocol.EnvParseResult := do
+    let category := args.category.toName
+    match runParserCategory' (← getEnv) category args.input with
+    | .ok (_, p) => return { pos := p.byteIdx }
+    | .error desc => throw { error := "parse", desc }
   goal_start (args: Protocol.GoalStart): EMainM Protocol.GoalStartResult := do
     let levelNames := (args.levels?.getD #[]).toList.map (·.toName)
     let expr?: Except _ GoalState ← liftTermElabM (levelNames := levelNames) do
