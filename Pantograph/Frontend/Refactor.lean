@@ -10,6 +10,7 @@ namespace Pantograph.Frontend
 
 namespace Refactor
 
+/-- A command in the input file, frozen in context -/
 structure Command where
   dependencies : NameSet := .empty
   stx : Syntax
@@ -99,6 +100,9 @@ def liftFrontend { α } (x : FrontendM α) : RefactorM α := do
 def runCoreM { α } (x : CoreM α) : RefactorM α := do
   liftFrontend $ runCommandElabM $ Elab.Command.liftCoreM x
 
+def pushNewCommand' (command : Syntax.Command) : RefactorM Unit := do
+  let f ← runCoreM $ PrettyPrinter.formatCommand command
+  pushNewCommand f
 
 /-- runs a "frozen" `CommandElabM` that can't modify anything. -/
 @[inline] protected
@@ -211,6 +215,12 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
   normalize (e : Expr) : CoreM Expr := do
     unfoldAuxLemmas $ ← unfoldMatchers e
 
+structure DependencyTracker where
+  -- Constants generated during the next batch of commands to be processed
+  innerConstants : NameSet := {}
+
+  isNonFlat : Bool := false
+
 /-- Scroll one unit down from the top -/
 def collectNextCommand : RefactorM Unit := do
   let { commands, .. } ← get
@@ -218,34 +228,45 @@ def collectNextCommand : RefactorM Unit := do
   modify ({ · with commands }) -- Prevents infinite loop
 
   if !decl.isSearchTarget then
-    let f ← runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
-    pushNewCommand f
+    pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
     return
 
   -- This keeps track of two `NameSet`s. If the dependency structure is
   -- non-flat, we cannot refactor this.
-  let ((series, commands), (_, _, isNonFlat)) := (λ (z : StateM (NameSet × NameSet × Bool) _) => z.run (decl.constants, {}, false)) $
-    commands.partitionM λ command => do
-      let (headDeps, innerDeps, isNonFlat) ← get
-      if command.dependencies.any (innerDeps.contains ·) then
-        let innerDeps := command.constants.fold (init := innerDeps) λ acc n => acc.insert n
-        set (headDeps, innerDeps, true)
+  let ((series, commands), tracker) := (λ (z : StateM DependencyTracker _) => z.run {}) $
+    commands.zipIdx.partitionM λ (command, _) => do
+      let tracker ← get
+      if command.dependencies.any tracker.innerConstants.contains then
+        let innerConstants := command.constants.fold
+          (init := tracker.innerConstants)
+          λ acc n => acc.insert n
+        modify ({· with innerConstants, isNonFlat := true})
         return true
-      if command.dependencies.any (headDeps.contains ·) then
-        let innerDeps := command.constants.fold (init := innerDeps) λ acc n => acc.insert n
-        set (headDeps, innerDeps, isNonFlat)
+      if command.dependencies.any decl.constants.contains then
+        let innerConstants := command.constants.fold
+          (init := tracker.innerConstants)
+          λ acc n => acc.insert n
+        modify ({· with innerConstants })
         return true
       else
         return false
   if series.isEmpty then
-    let f ← runCoreM $ PrettyPrinter.formatCommand (⟨decl.stx⟩ : Syntax.Command)
-    pushNewCommand f
+    pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
     return
+  -- Find all intercalating declarations and just run them
+  let maxIdx := series.map Prod.snd |>.max?.get!
+  let (intercalating, tail) := commands.partition λ (_, idx) => idx < maxIdx
   -- `series` should then be rolled into a single declaration
-  modify ({ · with commands })
-  if isNonFlat then
+  modify ({ · with commands := tail.map Prod.fst })
+
+  if tracker.isNonFlat then
     Refactor.fail "Cannot refactor non-flat dependency structure"
-  let f ← foldTheoremsFlat decl series
+
+  -- Push all intercalating commands
+  for (command, _) in intercalating do
+    pushNewCommand' (⟨command.stx⟩ : Syntax.Command)
+
+  let f ← foldTheoremsFlat decl (series.map Prod.fst)
   pushNewCommand f
 
 def messageHasError := "File has error!"

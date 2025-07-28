@@ -59,7 +59,8 @@ def helper (n : Nat) : Nat := n + 1
 theorem mystery (n : Nat) : f n = helper n := sorry
   "
   let expected := "
-def helper (n : Nat) : Nat := n + 1
+def helper (n : Nat) : Nat :=
+  n + 1
 def f_composite : { f : Nat → Nat // ∀ (n : Nat), f n = helper n } :=
   sorry
   ".trim
