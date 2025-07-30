@@ -178,10 +178,11 @@ example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
     }
   ])
 
-def test_sorry_with_local_instance : TestT MetaM Unit := do
-  let sketch := "
+def test_sorry_with_local_instance (tacticMode : Bool) : TestT MetaM Unit := do
+  let placeholder := if tacticMode then "by sorry" else "sorry"
+  let sketch := s!"
 def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
-example (α : Type) [Inhabited α] : α := sorry
+example (α : Type) [Inhabited α] : α := {placeholder}
   "
   let goalStates ← (collectSorrysFromSource sketch).run' {}
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
@@ -300,7 +301,8 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("sorry in middle", test_sorry_in_middle),
     ("sorry in induction", test_sorry_in_induction),
     ("sorry in coupled", test_sorry_in_coupled),
-    ("sorry with local instances", test_sorry_with_local_instance),
+    ("sorry with local instances (term)", test_sorry_with_local_instance false),
+    ("sorry with local instances (tactic)", test_sorry_with_local_instance true),
     ("sorry circular", test_sorry_circular),
     ("environment_capture", test_environment_capture),
     ("capture_type_mismatch", test_capture_type_mismatch),
