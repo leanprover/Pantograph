@@ -57,6 +57,7 @@ protected def Command.comments (command : Command) : Syntax :=
   comments[0]
 
 structure Config where
+  coreOptions : Options := {}
   deriving Inhabited
 
 structure Context where
@@ -72,6 +73,11 @@ structure State where
 
 /-- Two monads rolled into one -/
 abbrev RefactorM := ReaderT Context $ StateRefT State IO
+
+def readConfig : RefactorM Config := do
+  return (← read).config
+def readCoreOptions : RefactorM Options := do
+  return (← readConfig).coreOptions
 
 def fail { α } (s : String) : IO α :=
   throw <| .userError s
@@ -199,6 +205,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     let s := comment.getDocString
     if s.isEmpty then .none else s
   let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
+  let coreOptions ← readCoreOptions
   -- Under the environment of `head`, construct the companion type
   liftFrontend <| runCommandElabM do
     let target ← Elab.Command.liftTermElabM do
@@ -209,7 +216,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
       Meta.check target
       -- Delaborate this back into syntax
-      withOptions (λ opt => pp.funBinderTypes.set (pp.proofs.set opt true) true) do
+      withOptions (λ _ => pp.funBinderTypes.set (pp.proofs.set coreOptions true) true) do
         PrettyPrinter.delab target
     let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
     let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs

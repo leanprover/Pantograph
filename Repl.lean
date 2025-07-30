@@ -440,8 +440,14 @@ def execute (command: Protocol.Command): MainM Json := do
     return { id }
   frontend_refactor (args : Protocol.FrontendRefactor) : EMainM Protocol.FrontendRefactorResult := do
     try
-      let file ← Frontend.runRefactor (← getEnv) args.file
-      return { file }
+      let coreOptions? ← show IO _ from ExceptT.run $ args.coreOptions.foldlM (init := {}) λ acc opt =>
+        setOptionFromString' acc opt
+      match coreOptions? with
+      | .ok coreOptions => do
+        let file ← Frontend.runRefactor (← getEnv) args.file { coreOptions }
+        return { file }
+      | .error e =>
+        throw $ errorI "parse" e
     catch ex : IO.Error =>
       let error : Protocol.InteractionError := { error := "frontend", desc := ex.toString }
       throw error
