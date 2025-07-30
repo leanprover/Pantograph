@@ -419,6 +419,7 @@ structure FrontendData where
 
 structure FrontendRefactor where
   file : String
+  coreOptions : Array String
   deriving Lean.FromJson
 structure FrontendRefactorResult where
   file : String

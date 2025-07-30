@@ -136,9 +136,10 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   `sorry`. Conditionally inherit the environment from executing the file.
   Warning: Behaviour is unstable in case of multiple `sorry`s. Use the draft
   tactic if possible.
-* [Experimental] `frontend.refactor { "file": <str> }`: Group dependent `sorry`s
-  into one single `sorry`. Currently only flat dependencies are supported (i.e.
-  an object with a list of properties).
+* [Experimental] `frontend.refactor { "file": <str>, "coreOptions":
+  [["<key>=<val>"]] }`: Group dependent `sorry`s into one single `sorry`.
+  Currently only flat dependencies are supported (i.e.  an object with a list of
+  properties).
 
 ## Options
 

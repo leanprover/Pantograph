@@ -78,7 +78,7 @@ def createCoreState (imports: Array String): IO Core.State := do
 def parseElabType (type: String): Protocol.FallibleT Elab.TermElabM Expr := do
   let env ← MonadEnv.getEnv
   let syn ← match parseTerm env type with
-    | .error str => Protocol.throw $ errorI "parsing" str
+    | .error str => Protocol.throw $ errorI "parse" str
     | .ok syn => pure syn
   match ← elabType syn with
   | .error str => Protocol.throw $ errorI "elab" str
@@ -90,7 +90,7 @@ def parseElabExpr (expr: String) (expectedType?: Option String := .none): Protoc
   let env ← MonadEnv.getEnv
   let expectedType? ← expectedType?.mapM parseElabType
   let syn ← match parseTerm env expr with
-    | .error str => Protocol.throw $ errorI "parsing" str
+    | .error str => Protocol.throw $ errorI "parse" str
     | .ok syn => pure syn
   match ← elabTerm syn expectedType? with
   | .error str => Protocol.throw $ errorI "elab" str
