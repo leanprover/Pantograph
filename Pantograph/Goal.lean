@@ -3,6 +3,7 @@ Functions for handling metavariables
 
 All the functions starting with `try` resume their inner monadic state.
 -/
+import Pantograph.Elab
 import Pantograph.Tactic
 import Lean
 
@@ -529,14 +530,16 @@ protected def GoalState.tryTactic (state: GoalState) (site : Site) (tactic: Stri
         fragment.step goal tactic $ state.fragments.erase goal
       return { state' with fragments }
   -- Normal tactic without fragment
-  let tactic ← match Parser.runParserCategory
+  let (stx, pos) ← match runParser
     (env := ← getEnv)
-    (catName := `tactic)
+    (parser := Parser.Tactic.tacticSeq)
     (input := tactic)
     (fileName := ← getFileName) with
-    | .ok stx => pure $ stx
+    | .ok (stx, pos) => pure (stx, pos)
     | .error error => return .parseError error
-  let tacticM := Elab.Tactic.evalTactic tactic
+  if pos != tactic.endPos then
+    return .parseError "Cannot parse as one tactic block"
+  let tacticM := Elab.Tactic.evalTacticSeq stx
   withCapturingError do
     state.step site tacticM (guardMVarErrors := true)
 

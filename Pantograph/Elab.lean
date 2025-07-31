@@ -47,4 +47,14 @@ def runParserCategory' (env : Environment) (catName : Name) (input : String) (fi
   else
     Except.error (s.toErrorMsg ictx)
 
+open Parser in
+def runParser (env : Environment) (parser : Parser) (input : String) (fileName := "<input>") : Except String (Syntax × String.Pos) :=
+  let pfn := parser.fn
+  let ictx := mkInputContext input fileName
+  let s := pfn.run ictx { env, options := {} } (getTokenTable env) (mkParserState input)
+  if s.allErrors.isEmpty  then
+    Except.ok (s.stxStack.back, s.pos)
+  else
+    Except.error (s.toErrorMsg ictx)
+
 end Pantograph
