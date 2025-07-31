@@ -39,7 +39,7 @@ def elabTerm (syn: Syntax) (expectedType? : Option Expr := .none): Elab.TermElab
 
 open Parser in
 def runParserCategory' (env : Environment) (catName : Name) (input : String) (fileName := "<input>") : Except String (Syntax × String.Pos) :=
-  let p := andthenFn whitespace (categoryParserFnImpl catName)
+  let p := adaptCacheableContextFn ({ · with savedPos? := .some 0 }) (categoryParserFnImpl catName)
   let ictx := mkInputContext input fileName
   let s := p.run ictx { env, options := {} } (getTokenTable env) (mkParserState input)
   if s.allErrors.isEmpty  then
