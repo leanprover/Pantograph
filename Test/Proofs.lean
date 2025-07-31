@@ -399,6 +399,11 @@ def test_tactic_seq : TestM Unit := do
   let .success state _ ← state.tryTactic .unfocus "intro p q h\nhave : 1 + 1 = 2 := rfl\ncases h" | fail "Tactic failed"
   checkEq "Goals" state.goals.length 2
 
+def test_tactic_seq_placeholder : TestM Unit := do
+  let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|∀ (p q : Prop), p ∨ q → q ∨ p)) .none)
+  let .success state _ ← state.tryTactic .unfocus "intro p q h\nhave : 1 + 1 = 2 := ?_\ncases h" | fail "Tactic failed"
+  checkEq "Goals" state.goals.length 3
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("identity", test_identity),
@@ -412,6 +417,7 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("implicit arg in sideline", test_implicit_arg_sideline),
     ("deconstruct", test_deconstruct),
     ("tacticSeq", test_tactic_seq),
+    ("tacticSeq placeholder", test_tactic_seq_placeholder),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
 
