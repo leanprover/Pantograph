@@ -43,20 +43,5 @@ Inject any project path via the `pantograph_init_search` function.
 
 ## Development
 
-A Lean development shell is provided in the Nix flake. Nix usage is optional.
+See [Contributing](./doc/contributing.md).
 
-### Testing
-
-The tests are based on `LSpec`. To run tests, use either
-``` sh
-nix flake check
-```
-or
-``` sh
-lake test
-```
-You can run an individual test by specifying a prefix
-
-``` sh
-lake test -- "Tactic/No Confuse"
-```
