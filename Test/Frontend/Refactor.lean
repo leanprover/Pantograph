@@ -67,11 +67,27 @@ def f_composite : { f : Nat → Nat // ∀ (n : Nat), f n = helper n } :=
   let result ← runRefactor env src
   checkEq "result" result.trim expected
 
+private def test_predicate : Test := λ env ↦ do
+  let src := "
+def q : (Nat → Nat) → Prop := sorry
+def p : (Nat → Nat) → Prop := sorry
+theorem mystery : p Nat.succ := sorry
+  "
+  let expected := "
+def q : (Nat → Nat) → Prop :=
+  sorry
+def p_composite : { p : (Nat → Nat) → Prop // p Nat.succ } :=
+  sorry
+  ".trim
+  let result ← runRefactor env src
+  checkEq "result" result.trim expected
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("id", test_id),
     ("simple", test_simple),
     ("invalid", test_invalid),
     ("intercalating", test_intercalating),
+    ("predicate", test_predicate),
   ]
   tests.map λ (name, test) => (name, runTest $ test env)

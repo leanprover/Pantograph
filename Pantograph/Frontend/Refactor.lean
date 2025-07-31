@@ -111,7 +111,8 @@ def runCoreM { α } (x : CoreM α) : RefactorM α := do
   liftFrontend $ runCommandElabM $ Elab.Command.liftCoreM x
 
 def pushNewCommand' (command : Syntax.Command) : RefactorM Unit := do
-  let f ← runCoreM $ PrettyPrinter.formatCommand command
+  let f ← runCoreM do
+    PrettyPrinter.ppCommand command
   pushNewCommand f
 
 /-- runs a "frozen" `CommandElabM` that can't modify anything. -/
@@ -222,7 +223,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs
     let command ← `(command|$[$comment?:docComment]? def $theoremIdent : $target := sorry)
     Elab.Command.liftCoreM do
-      PrettyPrinter.formatCommand command
+      PrettyPrinter.ppCommand command
   where
   normalize (e : Expr) : CoreM Expr := do
     unfoldAuxLemmas $ ← unfoldMatchers e
