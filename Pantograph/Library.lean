@@ -112,6 +112,7 @@ def exprEcho (expr: String) (expectedType?: Option String := .none) (options: @&
 @[export pantograph_goal_start_expr_m]
 def goalStartExpr (expr: String) : Protocol.FallibleT Elab.TermElabM GoalState := do
   let t ← parseElabType expr
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
   GoalState.create t
 
 @[export pantograph_goal_serialize_m]

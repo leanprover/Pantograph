@@ -104,7 +104,8 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
 * `goal.tactic {"stateId": <id>, ["goalId": <id>], ["autoResume": <bool>], ...}`:
   Execute a tactic string on a given goal site. The tactic is supplied as additional
   key-value pairs in one of the following formats:
-  - `{ "tactic": <tactic> }`: Executes a tactic in the current mode
+  - `{ "tactic": <tactic> }`: Executes a tactic or a sequence of tactics in the
+    current mode.
   - `{ "mode": <mode> }`: Enter a different tactic mode. The permitted values
     are `tactic` (default), `conv`, `calc`. In case of `calc`, each step must
     be of the form `lhs op rhs`. An `lhs` of `_` indicates that it should be set
