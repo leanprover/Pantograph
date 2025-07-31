@@ -359,6 +359,7 @@ def test_tactic_failure_synthesize_placeholder : TestM Unit := do
 
 def test_implicit_arg_target : TestM Unit := do
   let state0 ← GoalState.create (← Elab.Term.elabTerm (← `(term|1 + 1 = 2)) .none)
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
   let .success state1 _ ← state0.tryTactic .unfocus "rfl" | fail "Tactic failed"
   checkEq "Goals" state1.goals.length 0
   let .some root := state1.rootExpr? | fail "State has no root"
@@ -366,6 +367,7 @@ def test_implicit_arg_target : TestM Unit := do
 
 def test_implicit_arg_sideline : TestM Unit := do
   let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|1 + 1 = 2)) .none)
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
   let .success state _ ← state.tryHave .unfocus "z" "2 + 2 = 4" | fail "Tactic failed"
   checkEq "Goals" state.goals.length 2
   let .success state _ ← state.tryTactic .unfocus "rfl" | fail "rfl failed"
@@ -392,6 +394,10 @@ def test_deconstruct : TestM Unit := do
       buildGoal [("p", "Prop"), ("q", "Prop"), ("hp", "p"), ("hq", "q")] "q ∧ p"
     ]
 
+def test_tactic_seq : TestM Unit := do
+  let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|∀ (p q : Prop), p ∨ q → q ∨ p)) .none)
+  let .success state _ ← state.tryTactic .unfocus "intro p q h\nhave : 1 + 1 = 2 := rfl\ncases h" | fail "Tactic failed"
+  checkEq "Goals" state.goals.length 2
 
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
@@ -405,6 +411,7 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("implicit arg in target", test_implicit_arg_target),
     ("implicit arg in sideline", test_implicit_arg_sideline),
     ("deconstruct", test_deconstruct),
+    ("tacticSeq", test_tactic_seq),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
 

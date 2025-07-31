@@ -446,10 +446,14 @@ automatically collect mvars from text tactics (vide
 protected def GoalState.step' { α } (state : GoalState) (site : Site) (tacticM : Elab.Tactic.TacticM α) (guardMVarErrors : Bool := false)
   : Elab.TermElabM (α × GoalState) := do
   Elab.Term.synthesizeSyntheticMVarsUsingDefault
+  let goals ← state.savedState.tactic.goals.filterM λ g => do pure !(← g.isAssignedOrDelayedAssigned)
+
   let ((a, parentMVars), { goals }) ← site.runTacticM tacticM
     |>.run { elaborator := .anonymous }
-    |>.run state.savedState.tactic
+    |>.run { goals }
   let nextElabState ← MonadBacktrack.saveState
+
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
 
   let goals ← if guardMVarErrors then
       parentMVars.foldlM (init := goals) λ goals parent => do
@@ -457,6 +461,9 @@ protected def GoalState.step' { α } (state : GoalState) (site : Site) (tacticM 
         return mergeMVarLists goals errors
     else
       pure goals
+
+  let goals ← goals.filterM λ g => do pure !(← g.isAssignedOrDelayedAssigned)
+
   let state' := {
     state with
     savedState := { term := nextElabState, tactic := { goals }, },
