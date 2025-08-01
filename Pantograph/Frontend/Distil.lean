@@ -177,19 +177,4 @@ def sorrysToGoalState (sorrys : List InfoWithContext) : MetaM AnnotatedGoalState
   let state ← GoalState.createFromMVars goals root
   return { state, srcBoundaries }
 
-@[export pantograph_frontend_collect_new_defined_constants_m]
-def collectNewDefinedConstants (step : CompilationStep) : IO NameSet := do
-  step.after.constants.map₂.foldlM (init := .empty) λ acc name _ => do
-    if step.before.contains name then
-      return acc
-    let coreM : CoreM Bool := Option.isSome <$> findDeclarationRanges? name
-    let hasRange ← coreM.run'
-      { fileName := step.fileName, fileMap := step.fileMap }
-      { env := step.after }
-      |>.toBaseIO
-    match hasRange with
-    | .ok true => return acc.insert name
-    | .ok false => return acc
-    | .error e => throw $ IO.userError (← e.toMessageData.toString)
-
 end Pantograph.Frontend

@@ -213,7 +213,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
         pure []
     let messages ← step.msgs.toArray.mapM (·.serialize)
     let newConstants ← if args.newConstants then
-        Frontend.collectNewDefinedConstants step
+        step.newConstants
       else
         pure .empty
     return {

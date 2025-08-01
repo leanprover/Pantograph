@@ -1,7 +1,7 @@
 /- A scrolling refactor algorithm: The algorithm ingests Lean compilation units
 on one end and outputs compilation units on the other. -/
 import Pantograph.Frontend.Basic
-import Pantograph.Frontend.Elab
+import Pantograph.Frontend.InfoTree
 import Pantograph.Delate
 
 open Lean
@@ -151,7 +151,7 @@ def hasSorry (step : CompilationStep) : Bool :=
 
 /-- Scroll to the end of the file, reading all compilation units in the process  -/
 def preprocessRefactor : FrontendM (List Command) := mapCompilationSteps λ step => do
-  let constants ← collectNewDefinedConstants step
+  let constants ← step.newConstants
   let dependencies := constants.fold (init := NameSet.empty) λ acc c =>
     acc.union $ constantDependencies step.after c
   let commandState := (← getThe Elab.Frontend.State).commandState
