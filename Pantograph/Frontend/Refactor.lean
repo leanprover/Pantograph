@@ -184,8 +184,8 @@ private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Exp
 private def mkDocComment (s : String) :=
   mkNode ``Parser.Command.docComment #[mkAtom "/--", mkAtom s!"{s} -/"]
 
-/-- Fold `sorry`s into one definition -/
-def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
+def distilSearchTarget { α } (head : Command) (tail : List Command) (f : Expr → List Expr → Elab.Term.TermElabM α)
+  : RefactorM α := do
   let (headName, witness) ← head.runCommandElabM do
     Elab.Command.liftCoreM do
       let env := head.state.env
@@ -200,33 +200,37 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       let type ← normalize info.type
       let c ← mkConstWithLevelParams headName
       Meta.kabstract type c
+  liftFrontend $ runCommandElabM $ Elab.Command.liftTermElabM do
+    f witness companions
+  where
+  normalize (e : Expr) : CoreM Expr := do
+    unfoldAuxLemmas $ ← unfoldMatchers e
+
+/-- Fold `sorry`s into one definition -/
+def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
   -- Concatenate all doc comments
   let allDocs := "\n".intercalate $ (head :: tail).filterMap λ command =>
     let `(docComment|$comment) := command.comments
     let s := comment.getDocString
     if s.isEmpty then .none else s
-  let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
+  let headName := head.constants.toList.head!
+  let .str _ binderName := headName
+    | panic! s!"head name must be .str but it is {headName}"
   let coreOptions ← readCoreOptions
-  -- Under the environment of `head`, construct the companion type
-  liftFrontend <| runCommandElabM do
-    let target ← Elab.Command.liftTermElabM do
-      -- Construct the companion
-      let companion ← Meta.withLocalDeclD (Name.mkSimple binderName) witness λ binder => do
-        let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
-        Meta.mkLambdaFVars #[binder] companion
-      let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
-      Meta.check target
-      -- Delaborate this back into syntax
-      withOptions (λ _ => pp.funBinderTypes.set (pp.proofs.set coreOptions true) true) do
-        PrettyPrinter.delab target
+  distilSearchTarget head tail λ witness companions => do
+    -- Construct the companion
+    let companion ← Meta.withLocalDeclD (Name.mkSimple binderName) witness λ binder => do
+      let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
+      Meta.mkLambdaFVars #[binder] companion
+    let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
+    Meta.check target
+    -- Delaborate this back into syntax
+    let target ← withOptions (λ _ => pp.funBinderTypes.set (pp.proofs.set coreOptions true) true) do
+      PrettyPrinter.delab target
     let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
     let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs
     let command ← `(command|$[$comment?:docComment]? def $theoremIdent : $target := sorry)
-    Elab.Command.liftCoreM do
-      PrettyPrinter.ppCommand command
-  where
-  normalize (e : Expr) : CoreM Expr := do
-    unfoldAuxLemmas $ ← unfoldMatchers e
+    PrettyPrinter.ppCommand command
 
 structure DependencyTracker where
   -- Constants generated during the next batch of commands to be processed
