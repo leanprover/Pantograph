@@ -242,6 +242,16 @@ example (p: Prop) (h: (∀ (x: Prop), Nat) → p): p := h (λ (y: Nat) => 5)
   checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
   ]
 
+def test_distil_simple : TestT MetaM Unit := do
+  let input := "
+theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  let .success state _ ← (state.tryTactic .unfocus "intro p q").run' (ctx := defaultElabContext)
+    | fail "`intro` failed"
+  checkEq "goals" state.goals.length 1
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("multiple_sorrys_in_proof", test_multiple_sorrys_in_proof),
@@ -254,5 +264,6 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("environment_capture", test_environment_capture),
     ("capture_type_mismatch", test_capture_type_mismatch),
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
+    ("distil simple", test_distil_simple),
   ]
   tests.map (fun (name, test) => (name, runMetaMSeq env $ runTest test))
