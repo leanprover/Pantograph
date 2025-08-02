@@ -226,7 +226,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
     Meta.check target
     -- Delaborate this back into syntax
-    let target ← withOptions (λ _ => pp.funBinderTypes.set (pp.proofs.set coreOptions true) true) do
+    let target ← withOptions (λ _ => pp.analyze.set coreOptions true) do
       PrettyPrinter.delab target
     let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
     let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs
