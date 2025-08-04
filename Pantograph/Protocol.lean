@@ -410,11 +410,24 @@ structure CompilationUnit where
 structure FrontendProcessResult where
   units: List CompilationUnit
   deriving Lean.ToJson
+
+/-- Frontend Process's side output going into a file -/
 structure FrontendDataUnit where
   invocations? : Option (List Protocol.InvokedTactic) := .none
   deriving Lean.ToJson
 structure FrontendData where
   units : List FrontendDataUnit
+  deriving Lean.ToJson
+
+structure FrontendDistil where
+  file : String
+  deriving Lean.FromJson
+structure FrontendDistilSearchTarget where
+  stateId : Nat
+  goals : Array Goal
+  deriving Lean.ToJson
+structure FrontendDistilResult where
+  targets : List FrontendDistilSearchTarget
   deriving Lean.ToJson
 
 structure FrontendRefactor where

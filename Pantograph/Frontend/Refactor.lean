@@ -1,7 +1,7 @@
 /- A scrolling refactor algorithm: The algorithm ingests Lean compilation units
 on one end and outputs compilation units on the other. -/
 import Pantograph.Frontend.Basic
-import Pantograph.Frontend.Elab
+import Pantograph.Frontend.InfoTree
 import Pantograph.Delate
 
 open Lean
@@ -19,6 +19,7 @@ structure Command where
   isSearchTarget : Bool := false
   constants : NameSet := .empty
   state : Elab.Command.State
+  messages : List Message
 
 inductive CommandCategory where
   -- Definition of data
@@ -62,7 +63,7 @@ structure Config where
 
 structure Context where
   inContext : Parser.InputContext
-  config : Config
+  config : Config := {}
 
 structure State where
   outContext : Parser.InputContext
@@ -150,8 +151,8 @@ def hasSorry (step : CompilationStep) : Bool :=
     !nodes.isEmpty
 
 /-- Scroll to the end of the file, reading all compilation units in the process  -/
-def preprocessRefactor : FrontendM (List Command) := mapCompilationSteps λ step => do
-  let constants ← collectNewDefinedConstants step
+def preprocess : FrontendM (List Command) := mapCompilationSteps λ step => do
+  let constants ← step.newConstants
   let dependencies := constants.fold (init := NameSet.empty) λ acc c =>
     acc.union $ constantDependencies step.after c
   let commandState := (← getThe Elab.Frontend.State).commandState
@@ -161,6 +162,7 @@ def preprocessRefactor : FrontendM (List Command) := mapCompilationSteps λ step
         stx := step.stx,
         trees := step.trees,
         state := commandState,
+        messages := step.msgs,
       }
     else
       {
@@ -170,11 +172,12 @@ def preprocessRefactor : FrontendM (List Command) := mapCompilationSteps λ step
         isSearchTarget := hasSorry step,
         constants,
         state := commandState,
+        messages := step.msgs,
       }
   return unit
 
 /-- Creates `combine (combine a[0] a[1]) a[2] ...` -/
-private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Expr
+def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Expr
   | .nil => return .const `Unit []
   | [a] => return a
   | x :: xs => do
@@ -184,8 +187,8 @@ private def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Exp
 private def mkDocComment (s : String) :=
   mkNode ``Parser.Command.docComment #[mkAtom "/--", mkAtom s!"{s} -/"]
 
-/-- Fold `sorry`s into one definition -/
-def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
+def distilSearchTarget { α } (head : Command) (tail : List Command) (f : Expr → List Expr → Elab.Term.TermElabM α)
+  : RefactorM α := do
   let (headName, witness) ← head.runCommandElabM do
     Elab.Command.liftCoreM do
       let env := head.state.env
@@ -200,39 +203,87 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       let type ← normalize info.type
       let c ← mkConstWithLevelParams headName
       Meta.kabstract type c
+  liftFrontend $ runCommandElabM $ Elab.Command.liftTermElabM do
+    f witness companions
+  where
+  normalize (e : Expr) : CoreM Expr := do
+    unfoldAuxLemmas $ ← unfoldMatchers e
+
+/-- Fold `sorry`s into one definition -/
+def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
   -- Concatenate all doc comments
   let allDocs := "\n".intercalate $ (head :: tail).filterMap λ command =>
     let `(docComment|$comment) := command.comments
     let s := comment.getDocString
     if s.isEmpty then .none else s
-  let .str _ binderName := headName | panic! s!"head name must be .str but it is {headName}"
+  let headName := head.constants.toList.head!
+  let binderName := match headName with
+    | .str _ binderName => Name.mkSimple binderName
+    | _ => `x
   let coreOptions ← readCoreOptions
-  -- Under the environment of `head`, construct the companion type
-  liftFrontend <| runCommandElabM do
-    let target ← Elab.Command.liftTermElabM do
-      -- Construct the companion
-      let companion ← Meta.withLocalDeclD (Name.mkSimple binderName) witness λ binder => do
-        let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
-        Meta.mkLambdaFVars #[binder] companion
-      let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
-      Meta.check target
-      -- Delaborate this back into syntax
-      withOptions (λ _ => pp.funBinderTypes.set (pp.proofs.set coreOptions true) true) do
-        PrettyPrinter.delab target
+  distilSearchTarget head tail λ witness companions => do
+    -- Construct the companion
+    let companion ← Meta.withLocalDeclD binderName witness λ binder => do
+      let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
+      Meta.mkLambdaFVars #[binder] companion
+    let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
+    Meta.check target
+    -- Delaborate this back into syntax
+    let target ← withOptions (λ _ => pp.analyze.set coreOptions true) do
+      PrettyPrinter.delab target
     let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
     let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs
     let command ← `(command|$[$comment?:docComment]? def $theoremIdent : $target := sorry)
-    Elab.Command.liftCoreM do
-      PrettyPrinter.ppCommand command
-  where
-  normalize (e : Expr) : CoreM Expr := do
-    unfoldAuxLemmas $ ← unfoldMatchers e
+    PrettyPrinter.ppCommand command
 
 structure DependencyTracker where
   -- Constants generated during the next batch of commands to be processed
   innerConstants : NameSet := {}
 
   isNonFlat : Bool := false
+structure DependencyStructure where
+  -- Commands which depend on each other
+  component : List Command := []
+  -- Intercalating commands
+  intercalating : List Command := []
+  -- Remainder
+  tail : List Command
+  -- Structure
+  tracker : DependencyTracker
+
+def extractDependencyStructure (head : Command) (commands : List Command)
+  : RefactorM DependencyStructure := do
+  let ((series, other), tracker) := (λ (z : StateM DependencyTracker _) => z.run {}) $
+    commands.zipIdx.partitionM λ (command, _) => do
+      let tracker ← get
+      if command.dependencies.any tracker.innerConstants.contains then
+        let innerConstants := command.constants.fold
+          (init := tracker.innerConstants)
+          λ acc n => acc.insert n
+        modify ({· with innerConstants, isNonFlat := true})
+        return true
+      if command.dependencies.any head.constants.contains then
+        let innerConstants := command.constants.fold
+          (init := tracker.innerConstants)
+          λ acc n => acc.insert n
+        modify ({· with innerConstants })
+        return true
+      else
+        return false
+  if series.isEmpty then
+    return {
+      tail := commands,
+      tracker,
+    }
+  -- Find all intercalating declarations
+  let maxIdx := series.map Prod.snd |>.max?.get!
+  let (intercalating, tail) := other.partition λ (_, idx) => idx < maxIdx
+  return {
+    component := series.map Prod.fst,
+    intercalating := intercalating.map Prod.fst,
+    tail := tail.map Prod.fst,
+    tracker
+  }
 
 /-- Scroll one unit down from the top -/
 def collectNextCommand : RefactorM Unit := do
@@ -244,45 +295,21 @@ def collectNextCommand : RefactorM Unit := do
     pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
     return
 
-  -- This keeps track of two `NameSet`s. If the dependency structure is
-  -- non-flat, we cannot refactor this.
-  let ((series, commands), tracker) := (λ (z : StateM DependencyTracker _) => z.run {}) $
-    commands.zipIdx.partitionM λ (command, _) => do
-      let tracker ← get
-      if command.dependencies.any tracker.innerConstants.contains then
-        let innerConstants := command.constants.fold
-          (init := tracker.innerConstants)
-          λ acc n => acc.insert n
-        modify ({· with innerConstants, isNonFlat := true})
-        return true
-      if command.dependencies.any decl.constants.contains then
-        let innerConstants := command.constants.fold
-          (init := tracker.innerConstants)
-          λ acc n => acc.insert n
-        modify ({· with innerConstants })
-        return true
-      else
-        return false
-  if series.isEmpty then
+  let depstr ← extractDependencyStructure decl commands
+  if depstr.component.isEmpty then
     pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
     return
-  -- Find all intercalating declarations and just run them
-  let maxIdx := series.map Prod.snd |>.max?.get!
-  let (intercalating, tail) := commands.partition λ (_, idx) => idx < maxIdx
-  -- `series` should then be rolled into a single declaration
-  modify ({ · with commands := tail.map Prod.fst })
 
-  if tracker.isNonFlat then
+  if depstr.tracker.isNonFlat then
     Refactor.fail "Cannot refactor non-flat dependency structure"
+  modify ({ · with commands := depstr.tail })
 
   -- Push all intercalating commands
-  for (command, _) in intercalating do
+  for command in depstr.intercalating do
     pushNewCommand' (⟨command.stx⟩ : Syntax.Command)
 
-  let f ← foldTheoremsFlat decl (series.map Prod.fst)
+  let f ← foldTheoremsFlat decl depstr.component
   pushNewCommand f
-
-def messageHasError := "File has error!"
 
 end Refactor
 
@@ -290,9 +317,11 @@ open Refactor in
 def runRefactor (env : Environment) (source : String) (config : Refactor.Config := {}) : IO String := do
   let filename := "<anonymous>"
   let (fContext, fState) ← createContextStateFromFile source filename env {}
-  let commands ← preprocessRefactor.run {} |>.run fContext |>.run' fState
-  if commands.any (·.hasError) then
-    throw $ IO.userError messageHasError
+  let commands ← preprocess.run {} |>.run fContext |>.run' fState
+  let errors := commands.filter (·.hasError)
+  if let .some error := errors.head? then
+    let message ← error.messages.mapM (·.toString)
+    throw $ IO.userError $ "\n".intercalate message
   let m : RefactorM Unit := do
     while !(← get).commands.isEmpty do
       collectNextCommand

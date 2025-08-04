@@ -50,7 +50,7 @@ abbrev ConstArray := Array (Name × ConstantInfo)
 abbrev DistilledEnvironment := Array Import × ConstArray
 
 /-- Boil an environment down to minimal components -/
-def distillEnvironment (env : Environment) (background? : Option Environment := .none)
+def distilEnvironment (env : Environment) (background? : Option Environment := .none)
   : DistilledEnvironment :=
   let filter : Name → Bool := match background? with
     | .some env => (¬ env.contains ·)
@@ -73,7 +73,7 @@ and then add the new constants.
 @[export pantograph_env_pickle_m]
 def environmentPickle (env : Environment) (path : System.FilePath) (background? : Option Environment := .none)
   : IO Unit :=
-  pickle path $ distillEnvironment env background?
+  pickle path $ distilEnvironment env background?
 
 deriving instance BEq for Import
 
@@ -158,7 +158,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
       | k => k
     acc.insert key { val with kind }
   pickle path ({
-    env := distillEnvironment env background?,
+    env := distilEnvironment env background?,
 
     core := ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
     meta,
