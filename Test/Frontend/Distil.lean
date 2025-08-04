@@ -258,14 +258,15 @@ theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
 def test_distil_companion : TestT MetaM Unit := do
   let input := "
 def f : Nat → Nat := sorry
-theorem mystery (n : Nat) : f n = n := sorry
+def g : Nat → Nat := λ x => x + 1
+theorem mystery (n : Nat) : f n = g n := sorry
   "
   let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
     | fail "Incorrect number of search states"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[{
     name := "",
-    target := { pp? := .some "{ f // ∀ (n : Nat), f n = n }" },
+    target := { pp? := .some "{ f // ∀ (n : Nat), f n = g n }" },
     }]
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=

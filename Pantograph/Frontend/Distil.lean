@@ -197,7 +197,7 @@ def distilSearchTargets (env : Environment) (source : String) : IO (List Distill
       modify ({ · with commands := depstr.tail })
       for command in depstr.intercalating do
         pushNewCommand' (⟨command.stx⟩ : Syntax.Command)
-      let searchTarget ← distilGoalStateFrom decl commands
+      let searchTarget ← distilGoalStateFrom decl depstr.component
       targets := targets ++ [searchTarget]
     pure targets
   let outContext := {
