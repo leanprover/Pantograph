@@ -421,6 +421,8 @@ structure FrontendData where
 
 structure FrontendDistil where
   file : String
+  -- If true, override binder name
+  binderName? : Option String
   deriving Lean.FromJson
 structure FrontendDistilSearchTarget where
   stateId : Nat
