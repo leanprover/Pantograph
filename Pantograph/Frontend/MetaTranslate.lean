@@ -111,9 +111,13 @@ partial def translateLCtx : MetaTranslateM LocalContext := do
   let lctx ← MonadLCtx.getLCtx
   assert! lctx.isEmpty
   (← getSourceLCtx).foldlM (λ lctx srcLocalDecl => do
-    let localDecl ← Meta.withLCtx' lctx do
-      translateLocalDecl srcLocalDecl
-    pure $ lctx.addDecl localDecl
+    -- Prevents circular proofs and panics
+    if srcLocalDecl.isAuxDecl && !(lctx.auxDeclToFullName.contains srcLocalDecl.fvarId) then
+       pure lctx
+    else
+      let localDecl ← Meta.withLCtx' lctx do
+        translateLocalDecl srcLocalDecl
+      pure $ lctx.addDecl localDecl
   ) lctx
 
 partial def translateMVarId (srcMVarId: MVarId) : MetaTranslateM MVarId := do
