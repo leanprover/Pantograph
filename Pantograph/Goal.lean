@@ -601,10 +601,11 @@ protected def GoalState.fragmentExit (state : GoalState) (site : Site):
     return .invalidAction "Goal does not have a fragment"
   state.restoreElabM
   withCapturingError do
-    let (fragments, state') ← state.step' goal (fragment.exit goal state.fragments)
+    let ((fragments, parentMVars), state') ← state.step' goal (fragment.exit goal state.fragments)
     return {
       state' with
       fragments,
+      parentMVars,
     }
 
 protected def GoalState.calcPrevRhsOf? (state : GoalState) (goal : MVarId) : Option Expr := do
