@@ -305,9 +305,9 @@ def test_frontend_process_sorry : Test := do
   let withSorry := "example (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.6",
+    name := "_uniq.3",
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.4", userName := "p", type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.1", userName := "p", type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.process"
     ({
@@ -365,7 +365,7 @@ def test_import_open : Test := do
 def test_frontend_process_circular : Test := do
   let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
   let goal1: Protocol.Goal := {
-    name := "_uniq.2",
+    name := "_uniq.1",
     target := { pp? := .some "1 + 2 = 2 + 3" },
     vars := #[],
   }
