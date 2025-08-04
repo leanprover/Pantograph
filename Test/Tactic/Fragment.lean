@@ -235,6 +235,24 @@ def test_conv_unfinished : TestM Unit := do
     let free := [("x", "Nat"), ("y", "Nat"), ("z", "Nat"), ("w", "Nat"), ("hyz", "y = z"), ("hxzw", "x + z = w")] ++ free
     buildGoal free target
 
+def test_conv_exit : TestM Unit := do
+  let rootTarget ← parseSentence "∀ (a b : Nat), b = 2 → 1 + a + 1 = a + b"
+  let state ← GoalState.create rootTarget
+  let tactic := "intro a b h"
+  let .success state _ ← state.tacticOn 0 tactic | fail "intro failed"
+  let calcParent := state.goals[0]!
+  let .success state _ ← state.calcEnter (.prefer state.goals[0]!) | fail "Cannot enter conversion tactic mode"
+  let .success state _ ← state.tryTactic .unfocus "1 + a + 1 = a + 1 + 1" | fail "rhs failed"
+  let .success state _ ← state.convEnter (.prefer state.goals[0]!) | fail "Cannot enter conversion tactic mode"
+  let .success state _ ← state.tryTactic .unfocus "rhs" | fail "rhs failed"
+  let .success state _ ← state.tryTactic .unfocus "rw [Nat.add_comm]" | fail "rhs failed"
+  let .success state _ ← state.fragmentExit .unfocus | fail "exit failed"
+  checkEq "(parents)" state.parentExprs.length 2
+  where
+  interiorGoal (free: List (String × String)) (target: String) :=
+    let free := [("a", "Nat"), ("b", "Nat"), ("h", "b = 2")] ++ free
+    buildGoal free target
+
 example : ∀ (a b c d: Nat), a + b = b + c → b + c = c + d → a + b = c + d := by
   intro a b c d h1 h2
   calc a + b = b + c := by apply h1
@@ -307,6 +325,7 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("conv simple", test_conv_simple),
     ("conv unshielded", test_conv_unshielded),
     ("conv unfinished", test_conv_unfinished),
+    ("conv exit", test_conv_exit),
     ("calc", test_calc),
   ] |>.map (λ (name, t) => (name, runTestTermElabM env t))
 
