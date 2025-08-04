@@ -63,6 +63,9 @@ example : ∀ (n m: Nat), n + m = m + n := by
       ],
     }
   ])
+  let .success st _ ← runTermElabMInMeta $ goalState.tryDraft .unfocus "have : 1 + 1 = 2 := by sorry\nsorry"
+    | fail "Draft tactic failed"
+  pure ()
 
 def test_sorry_in_induction : TestT MetaM Unit := do
   let sketch := "
