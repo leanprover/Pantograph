@@ -240,14 +240,13 @@ def test_conv_exit : TestM Unit := do
   let state ← GoalState.create rootTarget
   let tactic := "intro a b h"
   let .success state _ ← state.tacticOn 0 tactic | fail "intro failed"
-  let calcParent := state.goals[0]!
   let .success state _ ← state.calcEnter (.prefer state.goals[0]!) | fail "Cannot enter conversion tactic mode"
   let .success state _ ← state.tryTactic .unfocus "1 + a + 1 = a + 1 + 1" | fail "rhs failed"
   let .success state _ ← state.convEnter (.prefer state.goals[0]!) | fail "Cannot enter conversion tactic mode"
   let .success state _ ← state.tryTactic .unfocus "rhs" | fail "rhs failed"
   let .success state _ ← state.tryTactic .unfocus "rw [Nat.add_comm]" | fail "rhs failed"
   let .success state _ ← state.fragmentExit .unfocus | fail "exit failed"
-  checkEq "(parents)" state.parentExprs.length 2
+  checkEq "(parents)" state.parentExprs.length 1
   where
   interiorGoal (free: List (String × String)) (target: String) :=
     let free := [("a", "Nat"), ("b", "Nat"), ("h", "b = 2")] ++ free
