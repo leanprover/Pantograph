@@ -19,6 +19,7 @@ deriving instance Lean.ToJson for Protocol.GoalTactic
 deriving instance Lean.ToJson for Protocol.FrontendProcess
 deriving instance Lean.ToJson for Protocol.FrontendDataUnit
 deriving instance Lean.ToJson for Protocol.FrontendData
+deriving instance Lean.ToJson for Protocol.FrontendDistil
 
 abbrev TestM α := TestT MainM α
 abbrev Test := TestM Unit
@@ -399,6 +400,23 @@ def test_frontend_process_circular : Test := do
       }]
     } : Protocol.GoalTacticResult)
 
+def test_frontend_distil_simple : Test := do
+  let file := "theorem mystery (p: Prop) : p → p := sorry"
+  let goal1: Protocol.Goal := {
+    name := "_uniq.1",
+    target := { pp? := .some "∀ (p : Prop), p → p" },
+  }
+  step "frontend.distil"
+    ({
+      file,
+    }: Protocol.FrontendDistil)
+   ({
+     targets := [{
+       stateId := 0,
+       goals := #[goal1],
+     }],
+   } : Protocol.FrontendDistilResult)
+
 def runTestSuite (env : Lean.Environment) (steps : Test): IO LSpec.TestSeq := do
   -- Setup the environment for execution
   let coreContext ← createCoreContext #[]
@@ -420,6 +438,7 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("frontend.process sorry", test_frontend_process_sorry),
     ("frontend.process import", test_import_open),
     ("frontend.process circular", test_frontend_process_circular),
+    ("frontend.distil simple", test_frontend_distil_simple),
   ]
   tests.map (fun (name, test) => (name, runTestSuite env test))
 

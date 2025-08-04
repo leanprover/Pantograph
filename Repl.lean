@@ -177,6 +177,14 @@ end Goal
 
 section Frontend
 
+def frontend_distil (args: Protocol.FrontendDistil): EMainM Protocol.FrontendDistilResult := do
+  let targets ← Frontend.distilSearchTargets (← getEnv) args.file
+  let targets ← targets.mapM λ _dst@{ goalState } => do
+    let stateId ← newGoalState goalState
+    let goals ← runCoreM $ goalState.serializeGoals (options := (← get).options) |>.run'
+    return { stateId, goals }
+  return { targets }
+
 structure CompilationUnit where
   -- Environment immediately before the unit
   env : Environment
@@ -304,6 +312,7 @@ def execute (command: Protocol.Command): MainM Json := do
   | "goal.save"     => run goal_save
   | "goal.load"     => run goal_load
   | "frontend.process" => run frontend_process
+  | "frontend.distil"  => run frontend_distil
   | "frontend.refactor" => run frontend_refactor
   | cmd =>
     let error: Protocol.InteractionError :=
