@@ -180,8 +180,10 @@ def distilSearchTargets (env : Environment) (source : String) : IO (List Distill
   let filename := "<anonymous>"
   let (fContext, fState) ← createContextStateFromFile source filename env {}
   let commands ← Refactor.preprocess.run {} |>.run fContext |>.run' fState
-  if commands.any (·.hasError) then
-    throw $ IO.userError messageHasError
+  let errors := commands.filter (·.hasError)
+  if let .some error := errors.head? then
+    let message ← error.messages.mapM (·.toString)
+    throw $ IO.userError $ "\n".intercalate message
   let m : RefactorM (List DistilledSearchTarget) := do
     let mut targets := []
     while !(← get).commands.isEmpty do

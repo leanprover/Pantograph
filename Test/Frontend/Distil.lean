@@ -252,6 +252,19 @@ theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
     | fail "`intro` failed"
   checkEq "goals" state.goals.length 1
 
+def test_distil_companion : TestT MetaM Unit := do
+  let input := "
+def f : Nat → Nat := sorry
+theorem mystery (n : Nat) : f n = n := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
+    #[{
+    name := "",
+    target := { pp? := .some "{ f // ∀ (n : Nat), f n = n }" },
+    }]
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("multiple_sorrys_in_proof", test_multiple_sorrys_in_proof),
@@ -265,5 +278,6 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("capture_type_mismatch", test_capture_type_mismatch),
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
     ("distil simple", test_distil_simple),
+    ("distil companion", test_distil_companion),
   ]
   tests.map (fun (name, test) => (name, runMetaMSeq env $ runTest test))

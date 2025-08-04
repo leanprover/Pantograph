@@ -19,6 +19,7 @@ structure Command where
   isSearchTarget : Bool := false
   constants : NameSet := .empty
   state : Elab.Command.State
+  messages : List Message
 
 inductive CommandCategory where
   -- Definition of data
@@ -161,6 +162,7 @@ def preprocess : FrontendM (List Command) := mapCompilationSteps λ step => do
         stx := step.stx,
         trees := step.trees,
         state := commandState,
+        messages := step.msgs,
       }
     else
       {
@@ -170,6 +172,7 @@ def preprocess : FrontendM (List Command) := mapCompilationSteps λ step => do
         isSearchTarget := hasSorry step,
         constants,
         state := commandState,
+        messages := step.msgs,
       }
   return unit
 
@@ -308,8 +311,6 @@ def collectNextCommand : RefactorM Unit := do
   let f ← foldTheoremsFlat decl depstr.component
   pushNewCommand f
 
-def messageHasError := "File has error!"
-
 end Refactor
 
 open Refactor in
@@ -317,8 +318,10 @@ def runRefactor (env : Environment) (source : String) (config : Refactor.Config 
   let filename := "<anonymous>"
   let (fContext, fState) ← createContextStateFromFile source filename env {}
   let commands ← preprocess.run {} |>.run fContext |>.run' fState
-  if commands.any (·.hasError) then
-    throw $ IO.userError messageHasError
+  let errors := commands.filter (·.hasError)
+  if let .some error := errors.head? then
+    let message ← error.messages.mapM (·.toString)
+    throw $ IO.userError $ "\n".intercalate message
   let m : RefactorM Unit := do
     while !(← get).commands.isEmpty do
       collectNextCommand
