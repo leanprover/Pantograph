@@ -178,7 +178,7 @@ end Goal
 section Frontend
 
 def frontend_distil (args: Protocol.FrontendDistil): EMainM Protocol.FrontendDistilResult := do
-  let targets ← Frontend.distilSearchTargets (← getEnv) args.file
+  let targets ← Frontend.distilSearchTargets (← getEnv) args.file { binderName? := args.binderName?.map (·.toName) }
   let targets ← targets.mapM λ _dst@{ goalState } => do
     let stateId ← newGoalState goalState
     let goals ← runCoreM $ goalState.serializeGoals (options := (← get).options) |>.run'

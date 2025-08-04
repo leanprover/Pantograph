@@ -409,6 +409,7 @@ def test_frontend_distil_simple : Test := do
   step "frontend.distil"
     ({
       file,
+      binderName? := "x",
     }: Protocol.FrontendDistil)
    ({
      targets := [{

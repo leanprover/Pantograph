@@ -137,8 +137,9 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   `sorry`. Conditionally inherit the environment from executing the file.
   Warning: Behaviour is unstable in case of multiple `sorry`s. Use the draft
   tactic if possible.
-* `frontend.distil { "file": <str> }`: Extract condensed search targets from a
-  file, where coupled search targets will be condensed into one.
+* `frontend.distil { "file": <str>, ["binderName": <str>] }`: Extract condensed
+  search targets from a file, where coupled search targets will be condensed
+  into one. Set `binderName` to override the binder name to e.g. `f`.
 * [Experimental] `frontend.refactor { "file": <str>, "coreOptions":
   [["<key>=<val>"]] }`: Group dependent `sorry`s into one single `sorry`.
   Currently only flat dependencies are supported (i.e.  an object with a list of

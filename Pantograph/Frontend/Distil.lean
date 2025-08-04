@@ -172,11 +172,14 @@ def sorrysToGoalState (sorrys : List InfoWithContext) : MetaM AnnotatedGoalState
   let state ← GoalState.createFromMVars goals root
   return { state, srcBoundaries }
 
+structure DistilConfig where
+  binderName? : Option Name := .none
 structure DistilledSearchTarget where
   goalState : GoalState
 
 open Refactor in
-def distilSearchTargets (env : Environment) (source : String) : IO (List DistilledSearchTarget) := do
+def distilSearchTargets (env : Environment) (source : String) (config : DistilConfig := {})
+  : IO (List DistilledSearchTarget) := do
   let filename := "<anonymous>"
   let (fContext, fState) ← createContextStateFromFile source filename env {}
   let commands ← Refactor.preprocess.run {} |>.run fContext |>.run' fState
@@ -197,7 +200,7 @@ def distilSearchTargets (env : Environment) (source : String) : IO (List Distill
       modify ({ · with commands := depstr.tail })
       for command in depstr.intercalating do
         pushNewCommand' (⟨command.stx⟩ : Syntax.Command)
-      let searchTarget ← distilGoalStateFrom decl commands
+      let searchTarget ← distilGoalStateFrom decl depstr.component config
       targets := targets ++ [searchTarget]
     pure targets
   let outContext := {
@@ -214,12 +217,13 @@ def distilSearchTargets (env : Environment) (source : String) : IO (List Distill
   m.run { inContext := fContext.inputCtx }
     |>.run' { outContext, outState, commands }
   where
-  distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command)
+  distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command) (config : DistilConfig)
     : RefactorM DistilledSearchTarget := do
     let headName := head.constants.toList.head!
-    let binderName := match headName with
-      | .str _ binderName => Name.mkSimple binderName
-      | _ => `x
+    let binderName := match config.binderName?, headName with
+      | .some n, _ => n
+      | _, .str _ binderName => Name.mkSimple binderName
+      | _, _ => `x
     distilSearchTarget head tail λ witness companions => do
       let target ← if companions.isEmpty then
           pure witness
