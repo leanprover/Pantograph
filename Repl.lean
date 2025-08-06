@@ -194,6 +194,8 @@ structure CompilationUnit where
   messages : Array SerialMessage
   newConstants : NameSet
 
+export Frontend (defaultFileName)
+
 def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendProcessResult := do
   let options := (← getMainState).options
   let (fileName, file) ← match args.fileName?, args.file? with
@@ -201,7 +203,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
       let file ← IO.FS.readFile fileName
       pure (fileName, file)
     | .none, .some file =>
-      pure ("<anonymous>", file)
+      pure (defaultFileName, file)
     | _, _ => Protocol.throw $ errorI "arguments" "Exactly one of {fileName, file} must be supplied"
   let env?: Option Environment ← if args.readHeader then
       pure .none
@@ -451,8 +453,7 @@ def execute (command: Protocol.Command): MainM Json := do
   frontend_track (args : Protocol.FrontendTrack) : EMainM Protocol.FrontendTrackResult := do
     let env ← getEnv
     let collectOne (source : String) : IO _ := do
-      let filename := "<anonymous>"
-      let (context, state) ← do Frontend.createContextStateFromFile source filename env {}
+      let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
       let m := Frontend.collectEndState
       m.run { } |>.run context |>.run' state
     let srcState ← collectOne args.src

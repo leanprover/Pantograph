@@ -314,9 +314,9 @@ def collectNextCommand : RefactorM Unit := do
 end Refactor
 
 open Refactor in
-def runRefactor (env : Environment) (source : String) (config : Refactor.Config := {}) : IO String := do
-  let filename := "<anonymous>"
-  let (fContext, fState) ← createContextStateFromFile source filename env {}
+def runRefactor (env : Environment) (source : String)
+  (config : Refactor.Config := {}) (fileName := defaultFileName) : IO String := do
+  let (fContext, fState) ← createContextStateFromFile source fileName env {}
   let commands ← preprocess.run {} |>.run fContext |>.run' fState
   let errors := commands.filter (·.hasError)
   if let .some error := errors.head? then

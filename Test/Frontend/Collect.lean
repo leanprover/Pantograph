@@ -10,8 +10,7 @@ abbrev Test := Environment → TestT IO Unit
 
 def runFrontend { α } (env : Environment) (source: String) (f : CompilationStep → FrontendM α) (timeout : UInt32 := 0)
   : IO (List α) := do
-  let filename := "<anonymous>"
-  let (context, state) ← do createContextStateFromFile source filename env {}
+  let (context, state) ← do createContextStateFromFile source (env? := env)
   let m := mapCompilationSteps f
   let cancelTk? ← match timeout with
     | 0 => pure .none
@@ -29,8 +28,7 @@ example : ∀ (n : Nat), n + 1 = Nat.succ n := by
   checkEq "errors" errors [[], []]
 
 def collectNewConstants (env : Environment) (source: String) : IO (List (List Name)) := do
-  let filename := "<anonymous>"
-  let (context, state) ← do Frontend.createContextStateFromFile source filename env {}
+  let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     step.newConstants
   let result ← m.run {} |>.run context |>.run' state
@@ -69,8 +67,7 @@ def checkFileConflicts (env : Environment) (src dst : String) : IO (Except Strin
   ExceptT.run $ Environment.checkConflicts env srcState.env dstState.env
   where
   collectOne (source : String) : IO _ := do
-    let filename := "<anonymous>"
-    let (context, state) ← do createContextStateFromFile source filename env {}
+    let (context, state) ← do createContextStateFromFile source (env? := env)
     let m := collectEndState
     m.run { } |>.run context |>.run' state
 

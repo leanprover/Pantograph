@@ -7,8 +7,7 @@ namespace Pantograph.Test.Frontend.Distil
 
 def collectSorrysFromSource (source: String) (options : Frontend.GoalCollectionOptions := {})
     : MetaM (List GoalState) := do
-  let filename := "<anonymous>"
-  let (context, state) ← do Frontend.createContextStateFromFile source filename (← getEnv) {}
+  let (context, state) ← do Frontend.createContextStateFromFile source (env? := ← getEnv)
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     return (step.before, ← Frontend.collectSorrys step options)
   let li ← m.run {} |>.run context |>.run' state
