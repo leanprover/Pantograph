@@ -154,6 +154,8 @@ def findSourcePath (module : Name) : IO System.FilePath := do
   let olean ← findOLean module
   return System.FilePath.mk (olean.toString.replace ".lake/build/lib/" "") |>.withExtension "lean"
 
+def defaultFileName := "<anonymous>"
+
 /--
 Use with
 ```lean
@@ -165,7 +167,7 @@ m.run context |>.run' state
 @[export pantograph_frontend_create_context_state_from_file_m]
 def createContextStateFromFile
     (file : String) -- Content of the file
-    (fileName : String := "<anonymous>")
+    (fileName : String := defaultFileName)
     (env? : Option Lean.Environment := .none) -- If set to true, assume there's no header.
     (opts : Options := {})
     : IO (Elab.Frontend.Context × Elab.Frontend.State) := unsafe do
@@ -188,9 +190,10 @@ def createContextStateFromFile
   }
   return (context, state)
 
-def collectEndEnvironment : FrontendM Environment := do
+/-- Returns the command state at the end of execution -/
+def collectEndState : FrontendM Elab.Command.State := do
   executeFrontend λ _ => pure ()
   let state ← get
-  return state.commandState.env
+  return state.commandState
 
 end Pantograph.Frontend

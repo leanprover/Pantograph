@@ -438,6 +438,8 @@ structure FrontendTrack where
   deriving Lean.FromJson
 structure FrontendTrackResult where
   failure? : Option String := .none
+  srcMessages : Array Lean.SerialMessage := #[]
+  dstMessages : Array Lean.SerialMessage := #[]
   deriving Lean.ToJson
 
 structure FrontendRefactor where

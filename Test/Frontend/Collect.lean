@@ -64,14 +64,14 @@ theorem mystery [SizeOf α] (as : List α) (i : Fin as.length) : sizeOf (as.get 
   checkEq "constants" names [[`mystery]]
 
 def checkFileConflicts (env : Environment) (src dst : String) : IO (Except String Environment):= do
-  let srcEnv ← collectOne src
-  let dstEnv ← collectOne dst
-  ExceptT.run $ Environment.checkConflicts env srcEnv dstEnv
+  let srcState ← collectOne src
+  let dstState ← collectOne dst
+  ExceptT.run $ Environment.checkConflicts env srcState.env dstState.env
   where
-  collectOne (source : String) : IO Environment := do
+  collectOne (source : String) : IO _ := do
     let filename := "<anonymous>"
     let (context, state) ← do createContextStateFromFile source filename env {}
-    let m := collectEndEnvironment
+    let m := collectEndState
     m.run { } |>.run context |>.run' state
 
 def test_conflict_simple : Test := λ env => do

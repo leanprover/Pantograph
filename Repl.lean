@@ -450,14 +450,19 @@ def execute (command: Protocol.Command): MainM Json := do
     return { id }
   frontend_track (args : Protocol.FrontendTrack) : EMainM Protocol.FrontendTrackResult := do
     let env ← getEnv
-    let collectOne (source : String) : IO Environment := do
+    let collectOne (source : String) : IO _ := do
       let filename := "<anonymous>"
       let (context, state) ← do Frontend.createContextStateFromFile source filename env {}
-      let m := Frontend.collectEndEnvironment
+      let m := Frontend.collectEndState
       m.run { } |>.run context |>.run' state
-    let srcEnv ← collectOne args.src
-    let dstEnv ← collectOne args.dst
-    let result? ← show IO _ from ExceptT.run $ Environment.checkConflicts env srcEnv dstEnv
+    let srcState ← collectOne args.src
+    let dstState ← collectOne args.dst
+    let srcMessages ← srcState.messages.toArray.mapM (·.serialize)
+    let dstMessages ← dstState.messages.toArray.mapM (·.serialize)
+    if srcMessages.any (·.severity ==.error) ∨ dstMessages.any (·.severity ==.error) then
+      return { srcMessages, dstMessages }
+    let result? ← show IO _ from ExceptT.run do
+      Environment.checkConflicts env srcState.env dstState.env
     match result? with
     | .error e => return { failure? := .some e }
     | .ok _ => return {}
