@@ -357,6 +357,24 @@ def test_tactic_failure_synthesize_placeholder : TestM Unit := do
   checkEq s!"{tactic} fails" (← message.toString)
     s!"{← getFileName}:0:31: error: don't know how to synthesize placeholder\ncontext:\np q r : Prop\nh : p → q\n⊢ p ∧ r\n"
 
+def test_implicit_arg_target : TestM Unit := do
+  let state0 ← GoalState.create (← Elab.Term.elabTerm (← `(term|1 + 1 = 2)) .none)
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
+  let .success state1 _ ← state0.tryTactic .unfocus "rfl" | fail "Tactic failed"
+  checkEq "Goals" state1.goals.length 0
+  let .some root := state1.rootExpr? | fail "State has no root"
+  checkTrue "Root" !root.hasExprMVar
+
+def test_implicit_arg_sideline : TestM Unit := do
+  let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|1 + 1 = 2)) .none)
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
+  let .success state _ ← state.tryHave .unfocus "z" "2 + 2 = 4" | fail "Tactic failed"
+  checkEq "Goals" state.goals.length 2
+  let .success state _ ← state.tryTactic .unfocus "rfl" | fail "rfl failed"
+  let .success state _ ← state.tryTactic .unfocus "rfl" | fail "rfl failed"
+  let .some root := state.rootExpr? | fail "State has no root"
+  checkTrue "Root" !root.hasExprMVar
+
 def test_deconstruct : TestM Unit := do
   let state? ← startProof (.expr "∀ (p q : Prop) (h : And p q), And q p")
   let state0 ← match state? with
@@ -376,6 +394,15 @@ def test_deconstruct : TestM Unit := do
       buildGoal [("p", "Prop"), ("q", "Prop"), ("hp", "p"), ("hq", "q")] "q ∧ p"
     ]
 
+def test_tactic_seq : TestM Unit := do
+  let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|∀ (p q : Prop), p ∨ q → q ∨ p)) .none)
+  let .success state _ ← state.tryTactic .unfocus "intro p q h\nhave : 1 + 1 = 2 := rfl\ncases h" | fail "Tactic failed"
+  checkEq "Goals" state.goals.length 2
+
+def test_tactic_seq_placeholder : TestM Unit := do
+  let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|∀ (p q : Prop), p ∨ q → q ∨ p)) .none)
+  let .success state _ ← state.tryTactic .unfocus "intro p q h\nhave : 1 + 1 = 2 := ?_\ncases h" | fail "Tactic failed"
+  checkEq "Goals" state.goals.length 3
 
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
@@ -386,7 +413,11 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Or.comm", test_or_comm),
     ("tactic failure with unresolved goals", test_tactic_failure_unresolved_goals),
     ("tactic failure with synthesize placeholder", test_tactic_failure_synthesize_placeholder),
+    ("implicit arg in target", test_implicit_arg_target),
+    ("implicit arg in sideline", test_implicit_arg_sideline),
     ("deconstruct", test_deconstruct),
+    ("tacticSeq", test_tactic_seq),
+    ("tacticSeq placeholder", test_tactic_seq_placeholder),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
 

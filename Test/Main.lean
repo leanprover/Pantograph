@@ -4,6 +4,7 @@ import Test.Frontend
 import Test.Integration
 import Test.Library
 import Test.Metavar
+import Test.Parser
 import Test.Proofs
 import Test.Serial
 import Test.Tactic
@@ -49,10 +50,12 @@ def main (args: List String) := do
   let suites: List (String × (Lean.Environment → List (String × IO LSpec.TestSeq))) := [
     ("Environment", Environment.suite),
     ("Frontend/Collect", Frontend.Collect.suite),
+    ("Frontend/Distil", Frontend.Distil.suite),
     ("Frontend/Refactor", Frontend.Refactor.suite),
     ("Integration", Integration.suite),
     ("Library", Library.suite),
     ("Metavar", Metavar.suite),
+    ("Parser", Parser.suite),
     ("Proofs", Proofs.suite),
     ("Delate", Delate.suite),
     ("Serial", Serial.suite),

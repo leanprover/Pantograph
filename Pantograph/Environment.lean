@@ -198,4 +198,70 @@ def addDecl (name: String) (levels: Array String := #[]) (type?: Option String) 
   Lean.addDecl decl
   return {}
 
+def checkConflicts (src src' dst : Environment) : ExceptT String IO Environment := do
+  let (srcImports, srcConstants) := distilEnvironment src' (background? := .some src)
+  let mut srcConstants := srcConstants.foldl
+    (init := Std.HashMap.emptyWithCapacity srcConstants.size)
+    λ acc (k, v) => acc.insert k v
+  let (dstImports, dstConstants) := distilEnvironment dst (background? := .some src)
+  -- Replay all `dstConstants` in the environment
+  if srcImports != dstImports then
+    throw "Modification of imports is not allowed"
+  -- Replay all dst constants in src
+  let env ← try
+      src.replay $ dstConstants.foldl (init := .emptyWithCapacity dstConstants.size) λ acc (k, v) => acc.insert k v
+    catch ex : IO.Error =>
+      throw ex.toString
+  -- check if `constants` can fit into `src'`
+  for (name, dstInfo) in dstConstants do
+    if dstInfo.type.hasSorry then
+      throw s!"Definition type has sorry: {name}"
+    if dstInfo.value?.map Expr.hasSorry |>.getD false then
+      throw s!"Definition value has sorry: {name}"
+    match srcConstants[name]? with
+    | .some srcInfo =>
+      if srcInfo.type != dstInfo.type then
+        throw s!"Type clash of {name}"
+      if srcInfo.levelParams != dstInfo.levelParams then
+        throw s!"Level param clash of {name}"
+      if !(← infoCompare srcInfo dstInfo) then
+        throw s!"Definition clash of {name}"
+      if !isNoncomputable src' name ∧ isNoncomputable dst name then
+        throw s!"Must not modify computability on {name}"
+    | _ =>
+      if dstInfo.isAxiom then
+        throw s!"Adding axiom is not allowed: {name}"
+    srcConstants := srcConstants.erase name
+  let srcConstantsList := srcConstants.keys.filter (not ∘ isInternalSymbol)
+  if !srcConstantsList.isEmpty then
+    throw s!"{srcConstantsList} not accounted for"
+  return env
+  where
+  isInternalSymbol (name: Name) : Bool := match name with
+    | .str _ n => n == "_cstage1" || n == "_cstage2"
+    | _ => false
+  /-- Assumes type check has been done. -/
+  infoCompare (srcInfo dstInfo : ConstantInfo) : ExceptT String IO Bool :=
+    match srcInfo, dstInfo with
+    | .axiomInfo _a1, .axiomInfo _a2 => return true
+    | .defnInfo srcVal, .defnInfo dstVal => do
+      if srcVal.safety != dstVal.safety then
+        return false
+      if srcVal.value.hasSorry then
+        return true
+      -- Value modification is prohibited otherwise
+      return srcVal.value == dstVal.value
+    | .thmInfo srcVal, .thmInfo dstVal => do
+      if srcVal.value.hasSorry then
+        return true
+      -- Value modification is prohibited otherwise
+      return srcVal.value == dstVal.value
+    | .opaqueInfo _, .opaqueInfo _ => do
+      return true
+    | .quotInfo _, .quotInfo _ => return true
+    | .inductInfo _, .inductInfo _ => return true
+    | .ctorInfo _, .ctorInfo _ => return true
+    | .recInfo _, .recInfo _ => return true
+    | _, _ => return false
+
 end Pantograph.Environment

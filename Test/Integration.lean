@@ -8,6 +8,8 @@ import Test.Common
 namespace Pantograph.Test.Integration
 open Pantograph.Repl
 
+export Frontend (defaultFileName)
+
 deriving instance Lean.ToJson for Protocol.EnvInspect
 deriving instance Lean.ToJson for Protocol.EnvAdd
 deriving instance Lean.ToJson for Protocol.ExprEcho
@@ -19,6 +21,8 @@ deriving instance Lean.ToJson for Protocol.GoalTactic
 deriving instance Lean.ToJson for Protocol.FrontendProcess
 deriving instance Lean.ToJson for Protocol.FrontendDataUnit
 deriving instance Lean.ToJson for Protocol.FrontendData
+deriving instance Lean.ToJson for Protocol.FrontendTrack
+deriving instance Lean.ToJson for Protocol.FrontendDistil
 
 abbrev TestM α := TestT MainM α
 abbrev Test := TestM Unit
@@ -304,9 +308,9 @@ def test_frontend_process_sorry : Test := do
   let withSorry := "example (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.6",
+    name := "_uniq.3",
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.4", userName := "p", type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.1", userName := "p", type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.process"
     ({
@@ -322,7 +326,7 @@ def test_frontend_process_sorry : Test := do
        goals? := .some #[goal1],
        goalSrcBoundaries? := .some #[(57, 62)],
        messages := #[{
-         fileName := "<anonymous>",
+         fileName := defaultFileName,
          kind := `hasSorry,
          pos := ⟨2, 0⟩,
          endPos := .some ⟨2, 7⟩,
@@ -364,7 +368,7 @@ def test_import_open : Test := do
 def test_frontend_process_circular : Test := do
   let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
   let goal1: Protocol.Goal := {
-    name := "_uniq.2",
+    name := "_uniq.1",
     target := { pp? := .some "1 + 2 = 2 + 3" },
     vars := #[],
   }
@@ -380,7 +384,7 @@ def test_frontend_process_circular : Test := do
        goals? := .some #[goal1],
        goalSrcBoundaries? := .some #[(35, 40)],
        messages := #[{
-         fileName := "<anonymous>",
+         fileName := defaultFileName,
          kind := `hasSorry,
          pos := ⟨1, 8⟩,
          endPos := .some ⟨1, 15⟩,
@@ -399,6 +403,53 @@ def test_frontend_process_circular : Test := do
       }]
     } : Protocol.GoalTacticResult)
 
+def test_frontend_track : Test := do
+  step "frontend.track"
+    ({
+      src := "def f : Nat := sorry",
+      dst := "def f : Nat := false",
+    }: Protocol.FrontendTrack)
+   ({
+     srcMessages := #[
+       {
+         fileName := defaultFileName,
+         kind := `hasSorry,
+         pos := ⟨1, 4⟩,
+         endPos := .some ⟨1, 5⟩,
+         severity := .warning,
+         data := "declaration uses 'sorry'"
+       }
+     ],
+     dstMessages := #[
+       {
+         fileName := defaultFileName,
+         kind := .anonymous,
+         pos := ⟨1, 15⟩,
+         endPos := .some ⟨1, 20⟩,
+         severity := .error,
+         data := "type mismatch\n  false\nhas type\n  Bool : Type\nbut is expected to have type\n  Nat : Type"
+       },
+     ],
+   } : Protocol.FrontendTrackResult)
+
+def test_frontend_distil_simple : Test := do
+  let file := "theorem mystery (p: Prop) : p → p := sorry"
+  let goal1: Protocol.Goal := {
+    name := "_uniq.1",
+    target := { pp? := .some "∀ (p : Prop), p → p" },
+  }
+  step "frontend.distil"
+    ({
+      file,
+      binderName? := "x",
+    }: Protocol.FrontendDistil)
+   ({
+     targets := [{
+       stateId := 0,
+       goals := #[goal1],
+     }],
+   } : Protocol.FrontendDistilResult)
+
 def runTestSuite (env : Lean.Environment) (steps : Test): IO LSpec.TestSeq := do
   -- Setup the environment for execution
   let coreContext ← createCoreContext #[]
@@ -410,16 +461,18 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("expr.echo", test_expr_echo),
     ("options.set options.print", test_option_modify),
     ("Malformed command", test_malformed_command),
-    ("Tactic", test_tactic),
-    ("Tactic Timeout", test_tactic_timeout),
+    ("goal.tactic normal", test_tactic),
+    ("goal.tactic Timeout", test_tactic_timeout),
     ("Manual Mode", test_automatic_mode false),
     ("Automatic Mode", test_automatic_mode true),
-    ("Conv-Calc", test_conv_calc),
+    ("goal.tactic conv", test_conv_calc),
     ("env.add env.inspect", test_env_add_inspect),
     ("frontend.process invocation", test_frontend_process),
     ("frontend.process sorry", test_frontend_process_sorry),
     ("frontend.process import", test_import_open),
     ("frontend.process circular", test_frontend_process_circular),
+    ("frontend.track", test_frontend_track),
+    ("frontend.distil simple", test_frontend_distil_simple),
   ]
   tests.map (fun (name, test) => (name, runTestSuite env test))
 

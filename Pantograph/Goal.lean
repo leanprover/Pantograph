@@ -3,6 +3,7 @@ Functions for handling metavariables
 
 All the functions starting with `try` resume their inner monadic state.
 -/
+import Pantograph.Elab
 import Pantograph.Tactic
 import Lean
 
@@ -420,7 +421,9 @@ private def collectAllErroredMVars (src : MVarId) : Elab.TermElabM (List MVarId)
   --let _ ← Elab.Term.logUnassignedUsingErrorInfos descendants
   let mut alreadyVisited : MVarIdSet := {}
   let mut result : MVarIdSet := {}
-  for { mvarId, .. } in (← get).mvarErrorInfos do
+  for { mvarId, kind, .. } in (← get).mvarErrorInfos do
+    unless kind matches .hole do
+      continue
     unless alreadyVisited.contains mvarId do
       alreadyVisited := alreadyVisited.insert mvarId
       /- The metavariable `mvarErrorInfo.mvarId` may have been assigned or
@@ -442,11 +445,15 @@ automatically collect mvars from text tactics (vide
 -/
 protected def GoalState.step' { α } (state : GoalState) (site : Site) (tacticM : Elab.Tactic.TacticM α) (guardMVarErrors : Bool := false)
   : Elab.TermElabM (α × GoalState) := do
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
+  let goals ← state.savedState.tactic.goals.filterM λ g => do pure !(← g.isAssignedOrDelayedAssigned)
+
   let ((a, parentMVars), { goals }) ← site.runTacticM tacticM
     |>.run { elaborator := .anonymous }
-    |>.run state.savedState.tactic
+    |>.run { goals }
   let nextElabState ← MonadBacktrack.saveState
-  --Elab.Term.synthesizeSyntheticMVarsNoPostponing
+
+  Elab.Term.synthesizeSyntheticMVarsUsingDefault
 
   let goals ← if guardMVarErrors then
       parentMVars.foldlM (init := goals) λ goals parent => do
@@ -454,6 +461,9 @@ protected def GoalState.step' { α } (state : GoalState) (site : Site) (tacticM 
         return mergeMVarLists goals errors
     else
       pure goals
+
+  let goals ← goals.filterM λ g => do pure !(← g.isAssignedOrDelayedAssigned)
+
   let state' := {
     state with
     savedState := { term := nextElabState, tactic := { goals }, },
@@ -527,14 +537,16 @@ protected def GoalState.tryTactic (state: GoalState) (site : Site) (tactic: Stri
         fragment.step goal tactic $ state.fragments.erase goal
       return { state' with fragments }
   -- Normal tactic without fragment
-  let tactic ← match Parser.runParserCategory
+  let (stx, pos) ← match runParser
     (env := ← getEnv)
-    (catName := `tactic)
+    (parser := Parser.Tactic.tacticSeq)
     (input := tactic)
     (fileName := ← getFileName) with
-    | .ok stx => pure $ stx
+    | .ok (stx, pos) => pure (stx, pos)
     | .error error => return .parseError error
-  let tacticM := Elab.Tactic.evalTactic tactic
+  if pos != tactic.endPos then
+    return .parseError "Cannot parse as one tactic block"
+  let tacticM := Elab.Tactic.evalTacticSeq stx
   withCapturingError do
     state.step site tacticM (guardMVarErrors := true)
 
@@ -589,10 +601,11 @@ protected def GoalState.fragmentExit (state : GoalState) (site : Site):
     return .invalidAction "Goal does not have a fragment"
   state.restoreElabM
   withCapturingError do
-    let (fragments, state') ← state.step' goal (fragment.exit goal state.fragments)
+    let ((fragments, parentMVars), state') ← state.step' goal (fragment.exit goal state.fragments)
     return {
       state' with
       fragments,
+      parentMVars,
     }
 
 protected def GoalState.calcPrevRhsOf? (state : GoalState) (goal : MVarId) : Option Expr := do

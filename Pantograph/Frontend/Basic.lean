@@ -52,6 +52,21 @@ structure CompilationStep where
   msgs : List Message
   trees : List Elab.InfoTree
 
+@[export pantograph_frontend_compilation_step_defined_constants_m]
+protected def CompilationStep.newConstants (step : CompilationStep) : IO NameSet := do
+  step.after.constants.map₂.foldlM (init := .empty) λ acc name _ => do
+    if step.before.contains name then
+      return acc
+    let coreM : CoreM Bool := Option.isSome <$> findDeclarationRanges? name
+    let hasRange ← coreM.run'
+      { fileName := step.fileName, fileMap := step.fileMap }
+      { env := step.after }
+      |>.toBaseIO
+    match hasRange with
+    | .ok true => return acc.insert name
+    | .ok false => return acc
+    | .error e => throw $ IO.userError (← e.toMessageData.toString)
+
 /-- Like `Elab.Frontend.runCommandElabM`, but taking `cancelTk?` into account. -/
 @[inline] def runCommandElabM (x : Elab.Command.CommandElabM α) : FrontendM α := do
   let config ← read
@@ -139,6 +154,8 @@ def findSourcePath (module : Name) : IO System.FilePath := do
   let olean ← findOLean module
   return System.FilePath.mk (olean.toString.replace ".lake/build/lib/" "") |>.withExtension "lean"
 
+def defaultFileName := "<anonymous>"
+
 /--
 Use with
 ```lean
@@ -150,7 +167,7 @@ m.run context |>.run' state
 @[export pantograph_frontend_create_context_state_from_file_m]
 def createContextStateFromFile
     (file : String) -- Content of the file
-    (fileName : String := "<anonymous>")
+    (fileName : String := defaultFileName)
     (env? : Option Lean.Environment := .none) -- If set to true, assume there's no header.
     (opts : Options := {})
     : IO (Elab.Frontend.Context × Elab.Frontend.State) := unsafe do
@@ -172,5 +189,11 @@ def createContextStateFromFile
     cmdPos := parserState.pos
   }
   return (context, state)
+
+/-- Returns the command state at the end of execution -/
+def collectEndState : FrontendM Elab.Command.State := do
+  executeFrontend λ _ => pure ()
+  let state ← get
+  return state.commandState
 
 end Pantograph.Frontend

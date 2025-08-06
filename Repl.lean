@@ -177,6 +177,14 @@ end Goal
 
 section Frontend
 
+def frontend_distil (args: Protocol.FrontendDistil): EMainM Protocol.FrontendDistilResult := do
+  let targets ← Frontend.distilSearchTargets (← getEnv) args.file { binderName? := args.binderName?.map (·.toName) }
+  let targets ← targets.mapM λ _dst@{ goalState } => do
+    let stateId ← newGoalState goalState
+    let goals ← runCoreM $ goalState.serializeGoals (options := (← get).options) |>.run'
+    return { stateId, goals }
+  return { targets }
+
 structure CompilationUnit where
   -- Environment immediately before the unit
   env : Environment
@@ -186,6 +194,8 @@ structure CompilationUnit where
   messages : Array SerialMessage
   newConstants : NameSet
 
+export Frontend (defaultFileName)
+
 def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendProcessResult := do
   let options := (← getMainState).options
   let (fileName, file) ← match args.fileName?, args.file? with
@@ -193,7 +203,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
       let file ← IO.FS.readFile fileName
       pure (fileName, file)
     | .none, .some file =>
-      pure ("<anonymous>", file)
+      pure (defaultFileName, file)
     | _, _ => Protocol.throw $ errorI "arguments" "Exactly one of {fileName, file} must be supplied"
   let env?: Option Environment ← if args.readHeader then
       pure .none
@@ -213,7 +223,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
         pure []
     let messages ← step.msgs.toArray.mapM (·.serialize)
     let newConstants ← if args.newConstants then
-        Frontend.collectNewDefinedConstants step
+        step.newConstants
       else
         pure .empty
     return {
@@ -285,6 +295,8 @@ def execute (command: Protocol.Command): MainM Json := do
   match command.cmd with
   | "reset"         => run reset
   | "stat"          => run stat
+  | "options.set"   => run options_set
+  | "options.print" => run options_print
   | "expr.echo"     => run expr_echo
   | "env.describe"  => run env_describe
   | "env.module_read" => run env_module_read
@@ -293,8 +305,7 @@ def execute (command: Protocol.Command): MainM Json := do
   | "env.add"       => run env_add
   | "env.save"      => run env_save
   | "env.load"      => run env_load
-  | "options.set"   => run options_set
-  | "options.print" => run options_print
+  | "env.parse"     => run env_parse
   | "goal.start"    => run goal_start
   | "goal.tactic"   => run goal_tactic
   | "goal.continue" => run goal_continue
@@ -303,6 +314,8 @@ def execute (command: Protocol.Command): MainM Json := do
   | "goal.save"     => run goal_save
   | "goal.load"     => run goal_load
   | "frontend.process" => run frontend_process
+  | "frontend.distil"  => run frontend_distil
+  | "frontend.track"   => run frontend_track
   | "frontend.refactor" => run frontend_refactor
   | cmd =>
     let error: Protocol.InteractionError :=
@@ -321,6 +334,26 @@ def execute (command: Protocol.Command): MainM Json := do
     let state ← getMainState
     let nGoals := state.goalStates.size
     return { nGoals }
+  options_set (args: Protocol.OptionsSet): EMainM Protocol.OptionsSetResult := do
+    let state ← getMainState
+    let options := state.options
+    set { state with
+      options := {
+        -- FIXME: This should be replaced with something more elegant
+        printJsonPretty := args.printJsonPretty?.getD options.printJsonPretty,
+        printExprPretty := args.printExprPretty?.getD options.printExprPretty,
+        printExprAST := args.printExprAST?.getD options.printExprAST,
+        printDependentMVars := args.printDependentMVars?.getD options.printDependentMVars,
+        noRepeat := args.noRepeat?.getD options.noRepeat,
+        printAuxDecls := args.printAuxDecls?.getD options.printAuxDecls,
+        printImplementationDetailHyps := args.printImplementationDetailHyps?.getD options.printImplementationDetailHyps
+        automaticMode := args.automaticMode?.getD options.automaticMode,
+        timeout := args.timeout?.getD options.timeout,
+      }
+    }
+    return {  }
+  options_print (_: Protocol.OptionsPrint): EMainM Protocol.Options := do
+    return (← getMainState).options
   env_describe (args: Protocol.EnvDescribe): EMainM Protocol.EnvDescribeResult := do
     let result ← runCoreM $ Environment.describe args
     return result
@@ -347,26 +380,11 @@ def execute (command: Protocol.Command): MainM Json := do
     let levelNames := (args.levels?.getD #[]).toList.map (·.toName)
     liftExcept $ ← liftTermElabM (levelNames := levelNames) do
       (exprEcho args.expr (expectedType? := args.type?) (options := state.options)).run
-  options_set (args: Protocol.OptionsSet): EMainM Protocol.OptionsSetResult := do
-    let state ← getMainState
-    let options := state.options
-    set { state with
-      options := {
-        -- FIXME: This should be replaced with something more elegant
-        printJsonPretty := args.printJsonPretty?.getD options.printJsonPretty,
-        printExprPretty := args.printExprPretty?.getD options.printExprPretty,
-        printExprAST := args.printExprAST?.getD options.printExprAST,
-        printDependentMVars := args.printDependentMVars?.getD options.printDependentMVars,
-        noRepeat := args.noRepeat?.getD options.noRepeat,
-        printAuxDecls := args.printAuxDecls?.getD options.printAuxDecls,
-        printImplementationDetailHyps := args.printImplementationDetailHyps?.getD options.printImplementationDetailHyps
-        automaticMode := args.automaticMode?.getD options.automaticMode,
-        timeout := args.timeout?.getD options.timeout,
-      }
-    }
-    return {  }
-  options_print (_: Protocol.OptionsPrint): EMainM Protocol.Options := do
-    return (← getMainState).options
+  env_parse (args : Protocol.EnvParse) : EMainM Protocol.EnvParseResult := do
+    let category := args.category.toName
+    match runParserCategory' (← getEnv) category args.input with
+    | .ok (_, p) => return { pos := p.byteIdx }
+    | .error desc => throw { error := "parse", desc }
   goal_start (args: Protocol.GoalStart): EMainM Protocol.GoalStartResult := do
     let levelNames := (args.levels?.getD #[]).toList.map (·.toName)
     let expr?: Except _ GoalState ← liftTermElabM (levelNames := levelNames) do
@@ -432,10 +450,33 @@ def execute (command: Protocol.Command): MainM Json := do
     let (goalState, _) ← goalStateUnpickle args.path (background? := .some $ ← getEnv)
     let id ← newGoalState goalState
     return { id }
+  frontend_track (args : Protocol.FrontendTrack) : EMainM Protocol.FrontendTrackResult := do
+    let env ← getEnv
+    let collectOne (source : String) : IO _ := do
+      let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
+      let m := Frontend.collectEndState
+      m.run { } |>.run context |>.run' state
+    let srcState ← collectOne args.src
+    let dstState ← collectOne args.dst
+    let srcMessages ← srcState.messages.toArray.mapM (·.serialize)
+    let dstMessages ← dstState.messages.toArray.mapM (·.serialize)
+    if srcMessages.any (·.severity ==.error) ∨ dstMessages.any (·.severity ==.error) then
+      return { srcMessages, dstMessages }
+    let result? ← show IO _ from ExceptT.run do
+      Environment.checkConflicts env srcState.env dstState.env
+    match result? with
+    | .error e => return { failure? := .some e }
+    | .ok _ => return {}
   frontend_refactor (args : Protocol.FrontendRefactor) : EMainM Protocol.FrontendRefactorResult := do
     try
-      let file ← Frontend.runRefactor (← getEnv) args.file
-      return { file }
+      let coreOptions? ← show IO _ from ExceptT.run $ args.coreOptions.foldlM (init := {}) λ acc opt =>
+        setOptionFromString' acc opt
+      match coreOptions? with
+      | .ok coreOptions => do
+        let file ← Frontend.runRefactor (← getEnv) args.file { coreOptions }
+        return { file }
+      | .error e =>
+        throw $ errorI "parse" e
     catch ex : IO.Error =>
       let error : Protocol.InteractionError := { error := "frontend", desc := ex.toString }
       throw error

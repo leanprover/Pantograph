@@ -59,15 +59,15 @@ protected def Fragment.enterConv : Elab.Tactic.TacticM FragmentMap := do
     |>.insert goal (.conv rhs)
     |>.insert newGoal (.convSentinel goal)
 
-protected partial def Fragment.exit (fragment : Fragment) (goal : MVarId) (fragments : FragmentMap)
-  : Elab.Tactic.TacticM FragmentMap :=
+protected partial def Fragment.exit (fragment : Fragment) (goal : MVarId) (fMap: FragmentMap)
+  : Elab.Tactic.TacticM (FragmentMap × List MVarId) :=
   match fragment with
   | .calc .. => do
     Elab.Tactic.setGoals [goal]
-    return fragments.erase goal
+    return (fMap.erase goal, [])
   | .conv rhs => do
     let goals := (← Elab.Tactic.getGoals).filter λ descendant =>
-      match fragments[descendant]? with
+      match fMap[descendant]? with
       | .some s => (.convSentinel goal) == s
       | _ => false -- Not a conv goal from this
     -- Close all existing goals with `refl`
@@ -87,11 +87,12 @@ protected partial def Fragment.exit (fragment : Fragment) (goal : MVarId) (fragm
     let mvarId ← Elab.Tactic.getMainGoal
     liftM <| mvarId.refl <|> mvarId.inferInstance <|> pure ()
     Elab.Tactic.pruneSolvedGoals
-    return fragments.filter λ mvarId fragment =>
+    let fMap := fMap.filter λ mvarId fragment =>
       !(mvarId == goal || fragment == .convSentinel goal)
+    return (fMap, [mvarId])
   | .convSentinel parent =>
-    let parentFragment := fragments[parent]!
-    parentFragment.exit parent (fragments.erase goal)
+    let parentFragment := fMap[parent]!
+    parentFragment.exit parent (fMap.erase goal)
 
 protected def Fragment.step (fragment : Fragment) (goal : MVarId) (s : String) (map : FragmentMap)
   : Elab.Tactic.TacticM FragmentMap := goal.withContext do
@@ -182,7 +183,7 @@ protected def Fragment.step (fragment : Fragment) (goal : MVarId) (s : String) (
         -- This fragment must exist since we have conv goals
         let parentFragment := map[parent]!
         -- All descendants exhausted. Exit from the parent conv.
-        return ← parentFragment.exit parent map
+        return ← Prod.fst <$> parentFragment.exit parent map
     return newConvGoals.foldl (init := map) λ acc g =>
       acc.insert g fragment
 

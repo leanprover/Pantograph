@@ -37,6 +37,23 @@ structure Options where
 
 abbrev OptionsT := ReaderT Options
 
+/-- Set options; See `Options` struct above for meanings -/
+structure OptionsSet where
+  printJsonPretty?: Option Bool := .none
+  printExprPretty?: Option Bool := .none
+  printExprAST?: Option Bool := .none
+  printDependentMVars?: Option Bool := .none
+  noRepeat?: Option Bool := .none
+  printAuxDecls?: Option Bool := .none
+  printImplementationDetailHyps?: Option Bool := .none
+  automaticMode?: Option Bool := .none
+  timeout?: Option Nat := .none
+  deriving Lean.FromJson
+structure OptionsSetResult where
+  deriving Lean.ToJson
+structure OptionsPrint where
+  deriving Lean.FromJson
+
 --- Expression Objects ---
 
 structure BoundExpression where
@@ -220,22 +237,14 @@ structure EnvSaveLoad where
 structure EnvSaveLoadResult where
   deriving Lean.ToJson
 
-/-- Set options; See `Options` struct above for meanings -/
-structure OptionsSet where
-  printJsonPretty?: Option Bool := .none
-  printExprPretty?: Option Bool := .none
-  printExprAST?: Option Bool := .none
-  printDependentMVars?: Option Bool := .none
-  noRepeat?: Option Bool := .none
-  printAuxDecls?: Option Bool := .none
-  printImplementationDetailHyps?: Option Bool := .none
-  automaticMode?: Option Bool := .none
-  timeout?: Option Nat := .none
+structure EnvParse where
+  input : String
+  category : String
   deriving Lean.FromJson
-structure OptionsSetResult where
+structure EnvParseResult where
+  -- Byte boundary for the first syntax element
+  pos : Nat
   deriving Lean.ToJson
-structure OptionsPrint where
-  deriving Lean.FromJson
 
 structure GoalStart where
   -- Only one of the fields below may be populated.
@@ -401,6 +410,8 @@ structure CompilationUnit where
 structure FrontendProcessResult where
   units: List CompilationUnit
   deriving Lean.ToJson
+
+/-- Frontend Process's side output going into a file -/
 structure FrontendDataUnit where
   invocations? : Option (List Protocol.InvokedTactic) := .none
   deriving Lean.ToJson
@@ -408,8 +419,32 @@ structure FrontendData where
   units : List FrontendDataUnit
   deriving Lean.ToJson
 
+structure FrontendDistil where
+  file : String
+  -- If true, override binder name
+  binderName? : Option String
+  deriving Lean.FromJson
+structure FrontendDistilSearchTarget where
+  stateId : Nat
+  goals : Array Goal
+  deriving Lean.ToJson
+structure FrontendDistilResult where
+  targets : List FrontendDistilSearchTarget
+  deriving Lean.ToJson
+
+structure FrontendTrack where
+  src : String
+  dst : String
+  deriving Lean.FromJson
+structure FrontendTrackResult where
+  failure? : Option String := .none
+  srcMessages : Array Lean.SerialMessage := #[]
+  dstMessages : Array Lean.SerialMessage := #[]
+  deriving Lean.ToJson
+
 structure FrontendRefactor where
   file : String
+  coreOptions : Array String
   deriving Lean.FromJson
 structure FrontendRefactorResult where
   file : String

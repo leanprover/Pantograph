@@ -83,6 +83,10 @@ lake env printenv LEAN_PATH
 See `Pantograph/Protocol.lean` for a description of the parameters and return values in JSON.
 * `reset`: Delete all cached expressions and proof trees
 * `stat`: Display resource usage
+* `options.set { key: value, ... }`: Set one or more options. These are not Lean
+  `CoreM` options; those have to be set via command line arguments.), for
+  options see below.
+* `options.print`: Display the current set of options
 * `expr.echo {"expr": <expr>, "type": <optional expected type>, ["levels": [<levels>]]}`: Determine the
   type of an expression and format it.
 * `env.catalog`: Display a list of all safe Lean symbols in the current environment
@@ -93,16 +97,15 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   current environment to/from a file
 * `env.module_read { "module": <name> }`: Reads a list of symbols from a module
 * `env.describe {}`: Describes the imports and modules in the current environment
-* `options.set { key: value, ... }`: Set one or more options. These are not Lean
-  `CoreM` options; those have to be set via command line arguments.), for
-  options see below.
-* `options.print`: Display the current set of options
+* `env.parse { "input": <input>, "category": <parser-category> }`: Parse a bit
+  of syntax and returns the parser's terminal position.
 * `goal.start {["name": <name>], ["expr": <expr>], ["levels": [<levels>]], ["copyFrom": <symbol>]}`:
   Start a new proof from a given expression or symbol
 * `goal.tactic {"stateId": <id>, ["goalId": <id>], ["autoResume": <bool>], ...}`:
   Execute a tactic string on a given goal site. The tactic is supplied as additional
   key-value pairs in one of the following formats:
-  - `{ "tactic": <tactic> }`: Executes a tactic in the current mode
+  - `{ "tactic": <tactic> }`: Executes a tactic or a sequence of tactics in the
+    current mode.
   - `{ "mode": <mode> }`: Enter a different tactic mode. The permitted values
     are `tactic` (default), `conv`, `calc`. In case of `calc`, each step must
     be of the form `lhs op rhs`. An `lhs` of `_` indicates that it should be set
@@ -134,9 +137,16 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   `sorry`. Conditionally inherit the environment from executing the file.
   Warning: Behaviour is unstable in case of multiple `sorry`s. Use the draft
   tactic if possible.
-* [Experimental] `frontend.refactor { "file": <str> }`: Group dependent `sorry`s
-  into one single `sorry`. Currently only flat dependencies are supported (i.e.
-  an object with a list of properties).
+* `frontend.distil { "file": <str>, ["binderName": <str>] }`: Extract condensed
+  search targets from a file, where coupled search targets will be condensed
+  into one. Set `binderName` to override the binder name to e.g. `f`.
+* `frontend.track { "src": <str>, "dst": <str> }`: Check if one file conforms to
+  another. The declarations in `src` could have `sorry`s and the declarations in
+  `dst` would fill them.
+* [Experimental] `frontend.refactor { "file": <str>, "coreOptions":
+  [["<key>=<val>"]] }`: Group dependent `sorry`s into one single `sorry`.
+  Currently only flat dependencies are supported (i.e.  an object with a list of
+  properties).
 
 ## Options
 

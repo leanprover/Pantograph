@@ -1,13 +1,8 @@
-import Lean.Elab.Import
-import Lean.Elab.Command
-import Lean.Elab.InfoTree
-import Lean.DeclarationRange
-
-import Pantograph.Frontend.Basic
+import Pantograph.Frontend.InfoTree
 import Pantograph.Frontend.MetaTranslate
+import Pantograph.Frontend.Refactor
 import Pantograph.Goal
 import Pantograph.Protocol
-import Pantograph.Frontend.InfoTree
 
 open Lean
 
@@ -177,19 +172,66 @@ def sorrysToGoalState (sorrys : List InfoWithContext) : MetaM AnnotatedGoalState
   let state ← GoalState.createFromMVars goals root
   return { state, srcBoundaries }
 
-@[export pantograph_frontend_collect_new_defined_constants_m]
-def collectNewDefinedConstants (step : CompilationStep) : IO NameSet := do
-  step.after.constants.map₂.foldlM (init := .empty) λ acc name _ => do
-    if step.before.contains name then
-      return acc
-    let coreM : CoreM Bool := Option.isSome <$> findDeclarationRanges? name
-    let hasRange ← coreM.run'
-      { fileName := step.fileName, fileMap := step.fileMap }
-      { env := step.after }
-      |>.toBaseIO
-    match hasRange with
-    | .ok true => return acc.insert name
-    | .ok false => return acc
-    | .error e => throw $ IO.userError (← e.toMessageData.toString)
+structure DistilConfig where
+  binderName? : Option Name := .none
+structure DistilledSearchTarget where
+  goalState : GoalState
+
+open Refactor in
+def distilSearchTargets (env : Environment) (source : String) (config : DistilConfig := {}) (fileName : String := defaultFileName)
+  : IO (List DistilledSearchTarget) := do
+  let (fContext, fState) ← createContextStateFromFile source fileName env {}
+  let commands ← Refactor.preprocess.run {} |>.run fContext |>.run' fState
+  let errors := commands.filter (·.hasError)
+  if let .some error := errors.head? then
+    let message ← error.messages.mapM (·.toString)
+    throw $ IO.userError $ "\n".intercalate message
+  let m : RefactorM (List DistilledSearchTarget) := do
+    let mut targets := []
+    while !(← get).commands.isEmpty do
+      let { commands, .. } ← get
+      let decl :: commands := commands | Refactor.fail "No commands left"
+      modify ({ · with commands }) -- Prevents infinite loop
+
+      if !decl.isSearchTarget then
+        continue
+      let depstr ← extractDependencyStructure decl commands
+      modify ({ · with commands := depstr.tail })
+      for command in depstr.intercalating do
+        pushNewCommand' (⟨command.stx⟩ : Syntax.Command)
+      let searchTarget ← distilGoalStateFrom decl depstr.component config
+      targets := targets ++ [searchTarget]
+    pure targets
+  let outContext := {
+    fContext.inputCtx with
+    input := "",
+    fileMap := "".toFileMap,
+  }
+  let parserState := {}
+  let outState := {
+    commandState := Elab.Command.mkState env {} {},
+    parserState,
+    cmdPos := parserState.pos,
+  }
+  m.run { inContext := fContext.inputCtx }
+    |>.run' { outContext, outState, commands }
+  where
+  distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command) (config : DistilConfig)
+    : RefactorM DistilledSearchTarget := do
+    let headName := head.constants.toList.head!
+    let binderName := match config.binderName?, headName with
+      | .some n, _ => n
+      | _, .str _ binderName => Name.mkSimple binderName
+      | _, _ => `x
+    distilSearchTarget head tail λ witness companions => do
+      let target ← if companions.isEmpty then
+          pure witness
+        else
+          let companion ← Meta.withLocalDeclD binderName witness λ binder => do
+            let companion ← Refactor.mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
+            Meta.mkLambdaFVars #[binder] companion
+          Meta.mkAppOptM ``Subtype #[witness, companion]
+      let goalState ← GoalState.create target
+      return { goalState }
 
 end Pantograph.Frontend
