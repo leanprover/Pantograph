@@ -181,6 +181,18 @@ noncomputable def f : α := @Classical.choice α ne
     | fail "Must fail"
   checkEq "message" e "Must not modify computability on f"
 
+def test_conflict_fail_add_axiom : Test := λ env => do
+  let src := "
+theorem mystery : False := sorry
+  "
+  let dst := "
+axiom z : False
+theorem mystery : False := z
+  "
+  let .error e ← checkFileConflicts env src dst
+    | fail "Must fail"
+  checkEq "message" e "Adding axiom is not allowed: z"
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("open", test_open),
@@ -195,5 +207,6 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("conflict fail delete definition", test_conflict_fail_delete_definition),
     ("conflict fail inductive modification", test_conflict_fail_inductive_modification),
     ("conflict fail noncomputable", test_conflict_fail_noncomputable),
+    ("conflict fail add axiom", test_conflict_fail_add_axiom),
   ]
   tests.map (fun (name, test) => (name, runTest $ test env))
