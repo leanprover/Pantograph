@@ -110,6 +110,21 @@ def f : Nat → Nat := λ y => y + x
   match result? with
   | .ok _ =>  checkTrue "ok" result?.isOk
   | .error e =>  fail s!"Failed with {e}"
+def test_conflict_axiom : Test := λ env => do
+  let src := "
+axiom α : Type
+axiom ne : Nonempty α
+noncomputable def f : α := sorry
+  "
+  let dst := "
+axiom α : Type
+axiom ne : Nonempty α
+noncomputable def f : α := @Classical.choice α ne
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
 
 /-- from `GasStationManager/SafeVerify` -/
 def test_conflict_simple_def : Test := λ env => do
@@ -215,6 +230,7 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("conflict poly", test_conflict_poly),
     ("conflict auxiliary", test_conflict_auxiliary),
     ("conflict simple def", test_conflict_simple_def),
+    ("conflict axiom", test_conflict_axiom),
     ("conflict fake implementation", test_conflict_fake_implementation),
     ("conflict fail idempotent", test_conflict_fail_idempotent),
     ("conflict fail delete definition", test_conflict_fail_delete_definition),
