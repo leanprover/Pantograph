@@ -188,4 +188,9 @@ def createContextStateFromFile
   }
   return (context, state)
 
+def collectEndEnvironment : FrontendM Environment := do
+  executeFrontend λ _ => pure ()
+  let state ← get
+  return state.commandState.env
+
 end Pantograph.Frontend

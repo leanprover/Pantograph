@@ -432,6 +432,14 @@ structure FrontendDistilResult where
   targets : List FrontendDistilSearchTarget
   deriving Lean.ToJson
 
+structure FrontendTrack where
+  src : String
+  dst : String
+  deriving Lean.FromJson
+structure FrontendTrackResult where
+  failure? : Option String := .none
+  deriving Lean.ToJson
+
 structure FrontendRefactor where
   file : String
   coreOptions : Array String

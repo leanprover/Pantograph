@@ -140,6 +140,9 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
 * `frontend.distil { "file": <str>, ["binderName": <str>] }`: Extract condensed
   search targets from a file, where coupled search targets will be condensed
   into one. Set `binderName` to override the binder name to e.g. `f`.
+* `frontend.track { "src": <str>, "dst": <str> }`: Check if one file conforms to
+  another. The declarations in `src` could have `sorry`s and the declarations in
+  `dst` would fill them.
 * [Experimental] `frontend.refactor { "file": <str>, "coreOptions":
   [["<key>=<val>"]] }`: Group dependent `sorry`s into one single `sorry`.
   Currently only flat dependencies are supported (i.e.  an object with a list of
