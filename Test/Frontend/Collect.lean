@@ -137,6 +137,17 @@ def x : Nat := sorry
   let .error e ← checkFileConflicts env src src
     | fail "Must fail"
   checkEq "message" e "Definition value has sorry: x._cstage1"
+def test_conflict_fail_delete_definition : Test := λ env => do
+  let src := "
+def x : Nat := sorry
+def y : Nat := sorry
+  "
+  let dst := "
+def x : Nat := 123
+  "
+  let .error e ← checkFileConflicts env src dst
+    | fail "Must fail"
+  checkEq "message" e "[y] not accounted for"
 
 def test_conflict_fail_inductive_modification : Test := λ env => do
   let src := "
@@ -181,6 +192,7 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("conflict simple def", test_conflict_simple_def),
     ("conflict fake implementation", test_conflict_fake_implementation),
     ("conflict fail idempotent", test_conflict_fail_idempotent),
+    ("conflict fail delete definition", test_conflict_fail_delete_definition),
     ("conflict fail inductive modification", test_conflict_fail_inductive_modification),
     ("conflict fail noncomputable", test_conflict_fail_noncomputable),
   ]

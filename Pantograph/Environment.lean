@@ -227,8 +227,14 @@ def checkConflicts (src src' dst : Environment) : ExceptT String IO Environment 
       if dstInfo.isAxiom then
         throw s!"Adding axiom is not allowed: {name}"
     srcConstants := srcConstants.erase name
+  let srcConstantsList := srcConstants.keys.filter (not ∘ isInternalSymbol)
+  if !srcConstantsList.isEmpty then
+    throw s!"{srcConstantsList} not accounted for"
   return env
   where
+  isInternalSymbol (name: Name) : Bool := match name with
+    | .str _ n => n == "_cstage1" || n == "_cstage2"
+    | _ => false
   /-- Assumes type check has been done. -/
   infoCompare (srcInfo dstInfo : ConstantInfo) : ExceptT String IO Bool :=
     match srcInfo, dstInfo with
