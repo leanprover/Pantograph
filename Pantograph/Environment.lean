@@ -198,4 +198,32 @@ def addDecl (name: String) (levels: Array String := #[]) (type?: Option String) 
   Lean.addDecl decl
   return {}
 
+def checkConflicts (src src' dst : Environment) : ExceptT String IO Environment := do
+  let (srcImports, srcConstants) := distilEnvironment src' (background? := .some src)
+  let srcConstants := srcConstants.foldl
+    (init := Std.HashMap.emptyWithCapacity srcConstants.size)
+    λ acc (k, v) => acc.insert k v
+  let (dstImports, dstConstants) := distilEnvironment dst (background? := .some src)
+  if srcImports != dstImports then
+    throw "Modification of imports is not allowed"
+  let mut env := src
+  -- check if `constants` can fit into `src'`
+  for (name, dstInfo) in dstConstants do
+    env := ← env.replay (Std.HashMap.emptyWithCapacity 1 |>.insert name dstInfo)
+    match srcConstants[name]? with
+    | .some srcInfo =>
+      if !(← infoCompare srcInfo dstInfo) then
+        throw s!"Definition clash of {name}"
+    | _ =>
+      if dstInfo.isAxiom then
+        throw s!"Adding axiom is not allowed: {name}"
+      if dstInfo.isUnsafe then
+        throw s!"Adding unsafe is not allowed: {name}"
+  return env
+  where
+  infoCompare (srcInfo dstInfo : ConstantInfo) : IO Bool :=
+    match srcInfo, dstInfo with
+    | .defnInfo srcVal, .defnInfo dstVal => return true
+    | _, _ => return false
+
 end Pantograph.Environment
