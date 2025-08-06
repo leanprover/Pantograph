@@ -82,7 +82,93 @@ def x : Nat := sorry
 def x : Nat := 123
   "
   let result? ← checkFileConflicts env src dst
-  checkTrue "ok" result?.isOk
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
+
+def test_conflict_auxiliary : Test := λ env => do
+  let src := "
+def f : Nat → Nat := sorry
+  "
+  let dst := "
+def x : Nat := 123
+def f : Nat → Nat := λ y => y + x
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
+
+/-- from `GasStationManager/SafeVerify` -/
+def test_conflict_simple_def : Test := λ env => do
+  let src := "
+def solveAdd (a b:Int):{c:Int//a+c=b} := sorry
+  "
+  let dst := "
+def solveAdd (a b:Int):{c:Int//a+c=b} := ⟨b-a, by omega⟩
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
+/-- from `GasStationManager/SafeVerify` -/
+def test_conflict_fake_implementation : Test := λ env => do
+  let src := "
+noncomputable def definitely_at_least_two : Nat := sorry
+theorem definitely_at_least_two_spec : 2 ≤ definitely_at_least_two := sorry
+  "
+  let dst := "
+@[implemented_by Nat.zero]
+noncomputable def definitely_at_least_two : Nat :=
+  Exists.choose (⟨3, by simp⟩ : ∃ x, 2 ≤ x)
+
+theorem definitely_at_least_two_spec : 2 ≤ definitely_at_least_two :=
+  Exists.choose_spec _
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
+
+def test_conflict_fail_idempotent : Test := λ env => do
+  let src := "
+def x : Nat := sorry
+  "
+  let .error e ← checkFileConflicts env src src
+    | fail "Must fail"
+  checkEq "message" e "Definition value has sorry: x._cstage1"
+
+def test_conflict_fail_inductive_modification : Test := λ env => do
+  let src := "
+inductive A where
+  | a
+  | b
+  "
+  let dst := "
+inductive A where
+  | a
+  | b
+  | c
+  "
+  let .error e ← checkFileConflicts env src dst
+    | fail "Must fail"
+  checkEq "message" e "Type clash of A.casesOn"
+
+/-- from `GasStationManager/SafeVerify` -/
+def test_conflict_fail_noncomputable : Test := λ env => do
+  let src := "
+axiom α : Type
+axiom ne : Nonempty α
+def f : α := sorry
+  "
+  let dst := "
+axiom α : Type
+axiom ne : Nonempty α
+noncomputable def f : α := @Classical.choice α ne
+  "
+  let .error e ← checkFileConflicts env src dst
+    | fail "Must fail"
+  checkEq "message" e "Must not modify computability on f"
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
@@ -91,5 +177,11 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("collect_one_theorem", test_collect_one_theorem),
     ("collect_stub", test_collect_stub),
     ("conflict simple", test_conflict_simple),
+    ("conflict auxiliary", test_conflict_auxiliary),
+    ("conflict simple def", test_conflict_simple_def),
+    ("conflict fake implementation", test_conflict_fake_implementation),
+    ("conflict fail idempotent", test_conflict_fail_idempotent),
+    ("conflict fail inductive modification", test_conflict_fail_inductive_modification),
+    ("conflict fail noncomputable", test_conflict_fail_noncomputable),
   ]
   tests.map (fun (name, test) => (name, runTest $ test env))
