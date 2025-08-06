@@ -178,10 +178,9 @@ structure DistilledSearchTarget where
   goalState : GoalState
 
 open Refactor in
-def distilSearchTargets (env : Environment) (source : String) (config : DistilConfig := {})
+def distilSearchTargets (env : Environment) (source : String) (config : DistilConfig := {}) (fileName : String := defaultFileName)
   : IO (List DistilledSearchTarget) := do
-  let filename := "<anonymous>"
-  let (fContext, fState) ← createContextStateFromFile source filename env {}
+  let (fContext, fState) ← createContextStateFromFile source fileName env {}
   let commands ← Refactor.preprocess.run {} |>.run fContext |>.run' fState
   let errors := commands.filter (·.hasError)
   if let .some error := errors.head? then

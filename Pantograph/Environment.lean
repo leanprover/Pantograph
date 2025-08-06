@@ -208,7 +208,10 @@ def checkConflicts (src src' dst : Environment) : ExceptT String IO Environment 
   if srcImports != dstImports then
     throw "Modification of imports is not allowed"
   -- Replay all dst constants in src
-  let env ← src.replay $ dstConstants.foldl (init := .emptyWithCapacity dstConstants.size) λ acc (k, v) => acc.insert k v
+  let env ← try
+      src.replay $ dstConstants.foldl (init := .emptyWithCapacity dstConstants.size) λ acc (k, v) => acc.insert k v
+    catch ex : IO.Error =>
+      throw ex.toString
   -- check if `constants` can fit into `src'`
   for (name, dstInfo) in dstConstants do
     if dstInfo.type.hasSorry then
@@ -219,6 +222,8 @@ def checkConflicts (src src' dst : Environment) : ExceptT String IO Environment 
     | .some srcInfo =>
       if srcInfo.type != dstInfo.type then
         throw s!"Type clash of {name}"
+      if srcInfo.levelParams != dstInfo.levelParams then
+        throw s!"Level param clash of {name}"
       if !(← infoCompare srcInfo dstInfo) then
         throw s!"Definition clash of {name}"
       if !isNoncomputable src' name ∧ isNoncomputable dst name then

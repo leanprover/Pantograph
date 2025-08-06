@@ -50,7 +50,7 @@ theorem mystery (n : Nat) , f n = n := sorry
     let _ ← runRefactor env src
     fail "Should fail"
   catch ex : IO.Error =>
-    checkEq "error" ex.toString "<anonymous>:4:25: error: unexpected token ','; expected ':'\n"
+    checkEq "error" ex.toString s!"{defaultFileName}:4:25: error: unexpected token ','; expected ':'\n"
 
 private def test_intercalating : Test := λ env ↦ do
   let src := "

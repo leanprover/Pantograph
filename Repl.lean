@@ -194,6 +194,8 @@ structure CompilationUnit where
   messages : Array SerialMessage
   newConstants : NameSet
 
+export Frontend (defaultFileName)
+
 def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendProcessResult := do
   let options := (← getMainState).options
   let (fileName, file) ← match args.fileName?, args.file? with
@@ -201,7 +203,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
       let file ← IO.FS.readFile fileName
       pure (fileName, file)
     | .none, .some file =>
-      pure ("<anonymous>", file)
+      pure (defaultFileName, file)
     | _, _ => Protocol.throw $ errorI "arguments" "Exactly one of {fileName, file} must be supplied"
   let env?: Option Environment ← if args.readHeader then
       pure .none
@@ -450,14 +452,18 @@ def execute (command: Protocol.Command): MainM Json := do
     return { id }
   frontend_track (args : Protocol.FrontendTrack) : EMainM Protocol.FrontendTrackResult := do
     let env ← getEnv
-    let collectOne (source : String) : IO Environment := do
-      let filename := "<anonymous>"
-      let (context, state) ← do Frontend.createContextStateFromFile source filename env {}
-      let m := Frontend.collectEndEnvironment
+    let collectOne (source : String) : IO _ := do
+      let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
+      let m := Frontend.collectEndState
       m.run { } |>.run context |>.run' state
-    let srcEnv ← collectOne args.src
-    let dstEnv ← collectOne args.dst
-    let result? ← show IO _ from ExceptT.run $ Environment.checkConflicts env srcEnv dstEnv
+    let srcState ← collectOne args.src
+    let dstState ← collectOne args.dst
+    let srcMessages ← srcState.messages.toArray.mapM (·.serialize)
+    let dstMessages ← dstState.messages.toArray.mapM (·.serialize)
+    if srcMessages.any (·.severity ==.error) ∨ dstMessages.any (·.severity ==.error) then
+      return { srcMessages, dstMessages }
+    let result? ← show IO _ from ExceptT.run do
+      Environment.checkConflicts env srcState.env dstState.env
     match result? with
     | .error e => return { failure? := .some e }
     | .ok _ => return {}

@@ -10,8 +10,7 @@ abbrev Test := Environment → TestT IO Unit
 
 def runFrontend { α } (env : Environment) (source: String) (f : CompilationStep → FrontendM α) (timeout : UInt32 := 0)
   : IO (List α) := do
-  let filename := "<anonymous>"
-  let (context, state) ← do createContextStateFromFile source filename env {}
+  let (context, state) ← do createContextStateFromFile source (env? := env)
   let m := mapCompilationSteps f
   let cancelTk? ← match timeout with
     | 0 => pure .none
@@ -29,8 +28,7 @@ example : ∀ (n : Nat), n + 1 = Nat.succ n := by
   checkEq "errors" errors [[], []]
 
 def collectNewConstants (env : Environment) (source: String) : IO (List (List Name)) := do
-  let filename := "<anonymous>"
-  let (context, state) ← do Frontend.createContextStateFromFile source filename env {}
+  let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     step.newConstants
   let result ← m.run {} |>.run context |>.run' state
@@ -64,14 +62,13 @@ theorem mystery [SizeOf α] (as : List α) (i : Fin as.length) : sizeOf (as.get 
   checkEq "constants" names [[`mystery]]
 
 def checkFileConflicts (env : Environment) (src dst : String) : IO (Except String Environment):= do
-  let srcEnv ← collectOne src
-  let dstEnv ← collectOne dst
-  ExceptT.run $ Environment.checkConflicts env srcEnv dstEnv
+  let srcState ← collectOne src
+  let dstState ← collectOne dst
+  ExceptT.run $ Environment.checkConflicts env srcState.env dstState.env
   where
-  collectOne (source : String) : IO Environment := do
-    let filename := "<anonymous>"
-    let (context, state) ← do createContextStateFromFile source filename env {}
-    let m := collectEndEnvironment
+  collectOne (source : String) : IO _ := do
+    let (context, state) ← do createContextStateFromFile source (env? := env)
+    let m := collectEndState
     m.run { } |>.run context |>.run' state
 
 def test_conflict_simple : Test := λ env => do
@@ -85,6 +82,18 @@ def x : Nat := 123
   match result? with
   | .ok _ =>  checkTrue "ok" result?.isOk
   | .error e =>  fail s!"Failed with {e}"
+def test_conflict_poly : Test := λ env => do
+  let src := "
+def mystery : List α → List α := sorry
+  "
+  let dst := "
+def helper (li : List β) := li.reverse
+def mystery (li : List α) := (helper li) ++ li
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
 
 def test_conflict_auxiliary : Test := λ env => do
   let src := "
@@ -93,6 +102,21 @@ def f : Nat → Nat := sorry
   let dst := "
 def x : Nat := 123
 def f : Nat → Nat := λ y => y + x
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
+def test_conflict_axiom : Test := λ env => do
+  let src := "
+axiom α : Type
+axiom ne : Nonempty α
+noncomputable def f : α := sorry
+  "
+  let dst := "
+axiom α : Type
+axiom ne : Nonempty α
+noncomputable def f : α := @Classical.choice α ne
   "
   let result? ← checkFileConflicts env src dst
   match result? with
@@ -200,8 +224,10 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("collect_one_theorem", test_collect_one_theorem),
     ("collect_stub", test_collect_stub),
     ("conflict simple", test_conflict_simple),
+    ("conflict poly", test_conflict_poly),
     ("conflict auxiliary", test_conflict_auxiliary),
     ("conflict simple def", test_conflict_simple_def),
+    ("conflict axiom", test_conflict_axiom),
     ("conflict fake implementation", test_conflict_fake_implementation),
     ("conflict fail idempotent", test_conflict_fail_idempotent),
     ("conflict fail delete definition", test_conflict_fail_delete_definition),
