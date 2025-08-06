@@ -313,6 +313,7 @@ def execute (command: Protocol.Command): MainM Json := do
   | "goal.load"     => run goal_load
   | "frontend.process" => run frontend_process
   | "frontend.distil"  => run frontend_distil
+  | "frontend.track"   => run frontend_track
   | "frontend.refactor" => run frontend_refactor
   | cmd =>
     let error: Protocol.InteractionError :=
@@ -447,6 +448,19 @@ def execute (command: Protocol.Command): MainM Json := do
     let (goalState, _) ← goalStateUnpickle args.path (background? := .some $ ← getEnv)
     let id ← newGoalState goalState
     return { id }
+  frontend_track (args : Protocol.FrontendTrack) : EMainM Protocol.FrontendTrackResult := do
+    let env ← getEnv
+    let collectOne (source : String) : IO Environment := do
+      let filename := "<anonymous>"
+      let (context, state) ← do Frontend.createContextStateFromFile source filename env {}
+      let m := Frontend.collectEndEnvironment
+      m.run { } |>.run context |>.run' state
+    let srcEnv ← collectOne args.src
+    let dstEnv ← collectOne args.dst
+    let result? ← show IO _ from ExceptT.run $ Environment.checkConflicts env srcEnv dstEnv
+    match result? with
+    | .error e => return { failure? := .some e }
+    | .ok _ => return {}
   frontend_refactor (args : Protocol.FrontendRefactor) : EMainM Protocol.FrontendRefactorResult := do
     try
       let coreOptions? ← show IO _ from ExceptT.run $ args.coreOptions.foldlM (init := {}) λ acc opt =>
