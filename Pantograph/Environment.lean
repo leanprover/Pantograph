@@ -219,6 +219,8 @@ def checkConflicts (src src' dst : Environment) : ExceptT String IO Environment 
     | .some srcInfo =>
       if srcInfo.type != dstInfo.type then
         throw s!"Type clash of {name}"
+      if srcInfo.levelParams != dstInfo.levelParams then
+        throw s!"Level param clash of {name}"
       if !(← infoCompare srcInfo dstInfo) then
         throw s!"Definition clash of {name}"
       if !isNoncomputable src' name ∧ isNoncomputable dst name then

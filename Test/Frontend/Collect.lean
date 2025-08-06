@@ -85,6 +85,18 @@ def x : Nat := 123
   match result? with
   | .ok _ =>  checkTrue "ok" result?.isOk
   | .error e =>  fail s!"Failed with {e}"
+def test_conflict_poly : Test := λ env => do
+  let src := "
+def mystery : List α → List α := sorry
+  "
+  let dst := "
+def helper (li : List β) := li.reverse
+def mystery (li : List α) := (helper li) ++ li
+  "
+  let result? ← checkFileConflicts env src dst
+  match result? with
+  | .ok _ =>  checkTrue "ok" result?.isOk
+  | .error e =>  fail s!"Failed with {e}"
 
 def test_conflict_auxiliary : Test := λ env => do
   let src := "
@@ -200,6 +212,7 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("collect_one_theorem", test_collect_one_theorem),
     ("collect_stub", test_collect_stub),
     ("conflict simple", test_conflict_simple),
+    ("conflict poly", test_conflict_poly),
     ("conflict auxiliary", test_conflict_auxiliary),
     ("conflict simple def", test_conflict_simple_def),
     ("conflict fake implementation", test_conflict_fake_implementation),
