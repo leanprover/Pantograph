@@ -25,7 +25,7 @@ lean_exe tomograph {
 }
 
 require LSpec from git
-  "https://github.com/argumentcomputer/LSpec.git" @ "a6652a48b5c67b0d8dd3930fad6390a97d127e8d"
+  "https://github.com/argumentcomputer/LSpec.git" @ "db76512cd5266f0c576d561d8c69e2dc4890bea5"
 lean_lib Test {
 }
 @[test_driver]
