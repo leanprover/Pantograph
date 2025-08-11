@@ -174,6 +174,7 @@ def sorrysToGoalState (sorrys : List InfoWithContext) : MetaM AnnotatedGoalState
 
 structure DistilConfig where
   binderName? : Option Name := .none
+  ignoreValues : Bool := true
 structure DistilledSearchTarget where
   goalState : GoalState
 
@@ -190,10 +191,18 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
     let mut targets := []
     while !(← get).commands.isEmpty do
       let { commands, .. } ← get
-      let decl :: commands := commands | Refactor.fail "No commands left"
+      let decl :: commands := commands
+        | Refactor.fail "No commands left"
       modify ({ · with commands }) -- Prevents infinite loop
 
-      if !decl.isSearchTarget then
+      let isSearchTarget ← decl.runCoreM do
+        if decl.constants.isEmpty then
+          return false
+        let name := decl.constants.toList.head!
+        let info := (← getEnv).find? name |>.get!
+        let .some value := info.value? | return false
+        return value.hasSorry
+      if !isSearchTarget then
         continue
       let depstr ← extractDependencyStructure decl commands
       modify ({ · with commands := depstr.tail })
@@ -218,20 +227,55 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
   where
   distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command) (config : DistilConfig)
     : RefactorM DistilledSearchTarget := do
+    if head.constants.isEmpty then
+      throw $ .userError "No constants in head declaration"
     let headName := head.constants.toList.head!
     let binderName := match config.binderName?, headName with
       | .some n, _ => n
       | _, .str _ binderName => Name.mkSimple binderName
       | _, _ => `x
-    distilSearchTarget head tail λ witness companions => do
-      let target ← if companions.isEmpty then
-          pure witness
+    distilSearchTarget head tail λ (witness, witnessValue) companions => do
+    if companions.isEmpty then do
+      -- Without companions, we can directly construct a goal state
+      let goalState ← GoalState.create witness
+      let goalState ← if !config.ignoreValues then
+          goalState.step .unfocus do
+            let goal ← Elab.Tactic.getMainGoal
+            let (value, witnessGoals) ← Tactic.sorryToHole witnessValue |>.run []
+            Meta.check value
+            goal.assign value
+            Elab.Tactic.setGoals witnessGoals
         else
-          let companion ← Meta.withLocalDeclD binderName witness λ binder => do
-            let companion ← Refactor.mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
-            Meta.mkLambdaFVars #[binder] companion
-          Meta.mkAppOptM ``Subtype #[witness, companion]
+          pure goalState
+      return { goalState }
+    else
+      let companion ← Meta.withLocalDeclD binderName witness λ binder => do
+        let companion ← Refactor.mkProdElem ``And <| companions.map (·.fst.instantiate1 binder)
+        Meta.mkLambdaFVars #[binder] companion
+      let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
       let goalState ← GoalState.create target
+      let goalState ← if !config.ignoreValues && (!witnessValue.isSorry || companions.any (!·.snd.isSorry)) then
+          goalState.step .unfocus do
+            let goal ← Elab.Tactic.getMainGoal
+            -- Construct the solution expression
+            let (witnessValue', witnessGoals) ← Tactic.sorryToHole witnessValue |>.run []
+            assert! !witnessValue'.hasSorry
+            let companionValue ← Meta.withLocalDeclD binderName witness λ binder => do
+              let v ← Refactor.mkProdElem ``And.intro
+                <| companions.map λ (_, value) => value.instantiate1 binder
+              Meta.mkLambdaFVars #[binder] v
+            let (companionValue', companionGoals) ← Tactic.sorryToHole
+              (companionValue.beta #[witnessValue']) |>.run []
+            let value ← Meta.mkAppOptM ``Subtype.mk #[
+              witness, companion,
+              witnessValue',
+              companionValue',
+            ]
+            Meta.check value
+            goal.assign value
+            Elab.Tactic.setGoals (witnessGoals ++ companionGoals.reverse)
+        else
+          pure goalState
       return { goalState }
 
 end Pantograph.Frontend
