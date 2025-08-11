@@ -210,6 +210,8 @@ def distilSearchTarget { α } (head : Command) (tail : List Command) (f : (Expr 
       let type ← Meta.kabstract type c
       let .some value := info.value?
         | throwError s!"Constant has no value: {name}"
+      -- Normalization strips away matchers.
+      let value ← normalize value
       let value ← Meta.kabstract value c
       return (type, value)
   liftFrontend $ runCommandElabM $ Elab.Command.liftTermElabM do
