@@ -377,7 +377,7 @@ structure FrontendProcess where
   inheritEnv : Bool := false
   -- collect tactic invocations and output to a given file
   invocations?: Option String := .none
-  -- collect `sorry`s
+  -- collect `sorry`s. DEPRECATED: Use `frontend.distil` instead.
   sorrys: Bool := false
   -- collect type errors
   typeErrorsAsGoals: Bool := false
