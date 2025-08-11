@@ -196,6 +196,8 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
       modify ({ · with commands }) -- Prevents infinite loop
 
       let isSearchTarget ← decl.runCoreM do
+        if decl.constants.isEmpty then
+          return false
         let name := decl.constants.toList.head!
         let info := (← getEnv).find? name |>.get!
         let .some value := info.value? | return false
@@ -225,6 +227,8 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
   where
   distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command) (config : DistilConfig)
     : RefactorM DistilledSearchTarget := do
+    if head.constants.isEmpty then
+      throw $ .userError "No constants in head declaration"
     let headName := head.constants.toList.head!
     let binderName := match config.binderName?, headName with
       | .some n, _ => n

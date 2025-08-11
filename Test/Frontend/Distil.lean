@@ -246,6 +246,7 @@ example (p: Prop) (h: (∀ (x: Prop), Nat) → p): p := h (λ (y: Nat) => 5)
 
 def test_distil_simple : TestT MetaM Unit := do
   let input := "
+set_option pp.analyze true
 theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
   "
   let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input

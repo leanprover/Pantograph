@@ -16,7 +16,6 @@ structure Command where
   stx : Syntax
   trees : List Elab.InfoTree
   hasError : Bool := false
-  isSearchTarget : Bool := false
   constants : NameSet := .empty
   state : Elab.Command.State
   messages : List Message
@@ -169,7 +168,6 @@ def preprocess : FrontendM (List Command) := mapCompilationSteps λ step => do
         stx := step.stx,
         trees := step.trees,
         dependencies,
-        isSearchTarget := hasSorry step,
         constants,
         state := commandState,
         messages := step.msgs,
@@ -302,7 +300,14 @@ def collectNextCommand : RefactorM Unit := do
   let decl :: commands := commands | Refactor.fail "No commands left"
   modify ({ · with commands }) -- Prevents infinite loop
 
-  if !decl.isSearchTarget then
+  let isSearchTarget ← decl.runCoreM do
+    if decl.constants.isEmpty then
+      return false
+    let name := decl.constants.toList.head!
+    let info := (← getEnv).find? name |>.get!
+    let .some value := info.value? | return false
+    return value.hasSorry
+  if !isSearchTarget then
     pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
     return
 
