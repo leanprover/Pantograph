@@ -264,9 +264,50 @@ theorem mystery (n : Nat) : f n = g n := sorry
     | fail "Incorrect number of search states"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[{
-    name := "",
-    target := { pp? := .some "{ f // ∀ (n : Nat), f n = g n }" },
+      name := "",
+      target := { pp? := .some "{ f // ∀ (n : Nat), f n = g n }" },
     }]
+
+def test_distil_multiple_cond : TestT MetaM Unit := do
+  let input := "
+def f : Nat → Nat := sorry
+theorem mystery1 : f 1 = 1 := sorry
+theorem mystery2 : f 2 = 2 := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
+    #[{
+      name := "",
+      target := { pp? := .some "{ f // f 1 = 1 ∧ f 2 = 2 }" },
+    }]
+
+def test_distil_existing_value : TestT MetaM Unit := do
+  let input := "
+def f : Nat → Nat := λ x => x + sorry
+theorem mystery1 : f 1 = 1 := sorry
+theorem mystery2 : f 2 = 2 := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
+    | fail "Incorrect number of search states"
+  checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
+    #[
+      {
+        name := "",
+        vars := #[{ userName := "x", type? := .some { pp? := .some "Nat" } }]
+        target := { pp? := .some "Nat" },
+      },
+      {
+        name := "",
+        vars := #[{ userName := "f", type? := .some { pp? := .some "Nat → Nat" } }]
+        target := { pp? := .some "f 1 = 1" },
+      },
+      {
+        name := "",
+        vars := #[{ userName := "f", type? := .some { pp? := .some "Nat → Nat" } }]
+        target := { pp? := .some "f 2 = 2" },
+      },
+    ]
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
@@ -282,5 +323,7 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
     ("distil simple", test_distil_simple),
     ("distil companion", test_distil_companion),
+    ("distil multiple conditions", test_distil_multiple_cond),
+    ("distil existing value", test_distil_existing_value),
   ]
   tests.map (fun (name, test) => (name, runMetaMSeq env $ runTest test))

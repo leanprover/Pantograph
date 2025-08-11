@@ -187,14 +187,21 @@ def mkProdElem (combine : Name := ``And.intro) : List Expr → MetaM Expr
 private def mkDocComment (s : String) :=
   mkNode ``Parser.Command.docComment #[mkAtom "/--", mkAtom s!"{s} -/"]
 
-def distilSearchTarget { α } (head : Command) (tail : List Command) (f : Expr → List Expr → Elab.Term.TermElabM α)
+protected def _root_.Array.last! { α } [Inhabited α] (a : Array α) : α :=
+  match h : a.size with
+  | 0 => default
+  | n+1 => a[n]
+
+def distilSearchTarget { α } (head : Command) (tail : List Command) (f : (Expr × Expr) → List (Expr × Expr) → Elab.Term.TermElabM α)
   : RefactorM α := do
-  let (headName, witness) ← head.runCommandElabM do
+  let (headName, witness, witnessValue) ← head.runCommandElabM do
     Elab.Command.liftCoreM do
       let env := head.state.env
       let name := head.constants.toList.head!
       let info := env.find? name |>.get!
-      return (name, ← normalize info.type)
+      let .some value := info.value?
+        | throwError s!"Constant has no value: {name}"
+      return (name, ← normalize info.type, ← normalize value)
   let companions ← tail.mapM λ command => command.runCommandElabM do
     Elab.Command.liftTermElabM do
       let env := command.state.env
@@ -202,9 +209,13 @@ def distilSearchTarget { α } (head : Command) (tail : List Command) (f : Expr �
       let info := env.find? name |>.get!
       let type ← normalize info.type
       let c ← mkConstWithLevelParams headName
-      Meta.kabstract type c
+      let type ← Meta.kabstract type c
+      let .some value := info.value?
+        | throwError s!"Constant has no value: {name}"
+      let value ← Meta.kabstract value c
+      return (type, value)
   liftFrontend $ runCommandElabM $ Elab.Command.liftTermElabM do
-    f witness companions
+    f (witness, witnessValue) companions
   where
   normalize (e : Expr) : CoreM Expr := do
     unfoldAuxLemmas $ ← unfoldMatchers e
@@ -221,10 +232,10 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
     | .str _ binderName => Name.mkSimple binderName
     | _ => `x
   let coreOptions ← readCoreOptions
-  distilSearchTarget head tail λ witness companions => do
+  distilSearchTarget head tail λ (witness, _) companions => do
     -- Construct the companion
     let companion ← Meta.withLocalDeclD binderName witness λ binder => do
-      let companion ← mkProdElem ``And.intro <| companions.map (·.instantiate1 binder)
+      let companion ← mkProdElem ``And <| companions.map (·.fst.instantiate1 binder)
       Meta.mkLambdaFVars #[binder] companion
     let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
     Meta.check target

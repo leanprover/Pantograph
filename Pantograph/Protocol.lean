@@ -421,8 +421,12 @@ structure FrontendData where
 
 structure FrontendDistil where
   file : String
-  -- If true, override binder name
+  /-- If true, override default binder name which is generated from definition
+  names -/
   binderName? : Option String
+  /-- If set to true, the values of search targets are discarded. Otherwise they
+  will be incorporated into the generated goal state. -/
+  ignoreValues : Bool := true
   deriving Lean.FromJson
 structure FrontendDistilSearchTarget where
   stateId : Nat
