@@ -264,7 +264,6 @@ theorem mystery (n : Nat) : f n = g n := sorry
     | fail "Incorrect number of search states"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[{
-      name := "",
       target := { pp? := .some "{ f // ∀ (n : Nat), f n = g n }" },
     }]
 
@@ -278,7 +277,6 @@ theorem mystery2 : f 2 = 2 := sorry
     | fail "Incorrect number of search states"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[{
-      name := "",
       target := { pp? := .some "{ f // f 1 = 1 ∧ f 2 = 2 }" },
     }]
 
@@ -293,19 +291,14 @@ theorem mystery2 : f 2 = 2 := sorry
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[
       {
-        name := "",
         vars := #[{ userName := "x", type? := .some { pp? := .some "Nat" } }]
         target := { pp? := .some "Nat" },
       },
       {
-        name := "",
-        vars := #[{ userName := "f", type? := .some { pp? := .some "Nat → Nat" } }]
-        target := { pp? := .some "f 1 = 1" },
+        target := { pp? := .some "(fun x => x + ?m.7) 1 = 1" },
       },
       {
-        name := "",
-        vars := #[{ userName := "f", type? := .some { pp? := .some "Nat → Nat" } }]
-        target := { pp? := .some "f 2 = 2" },
+        target := { pp? := .some "(fun x => x + ?m.7) 2 = 2" },
       },
     ]
 

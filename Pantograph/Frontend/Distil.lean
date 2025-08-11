@@ -250,7 +250,7 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
         Meta.mkLambdaFVars #[binder] companion
       let target ← Meta.mkAppOptM ``Subtype #[witness, companion]
       let goalState ← GoalState.create target
-      let goalState ← if !config.ignoreValues && (!witnessValue.isSorry || companions.any (·.snd.isSorry)) then
+      let goalState ← if !config.ignoreValues && (!witnessValue.isSorry || companions.any (!·.snd.isSorry)) then
           goalState.step .unfocus do
             let goal ← Elab.Tactic.getMainGoal
             -- Construct the solution expression
@@ -260,11 +260,12 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
               let v ← Refactor.mkProdElem ``And.intro
                 <| companions.map λ (_, value) => value.instantiate1 binder
               Meta.mkLambdaFVars #[binder] v
-            let (companionValue', companionGoals) ← Tactic.sorryToHole companionValue |>.run []
+            let (companionValue', companionGoals) ← Tactic.sorryToHole
+              (companionValue.beta #[witnessValue']) |>.run []
             let value ← Meta.mkAppOptM ``Subtype.mk #[
               witness, companion,
               witnessValue',
-              .some $ .app companionValue' witnessValue'
+              companionValue',
             ]
             Meta.check value
             goal.assign value
