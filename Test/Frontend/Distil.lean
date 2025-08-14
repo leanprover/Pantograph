@@ -5,8 +5,11 @@ open Lean Pantograph Frontend
 
 namespace Pantograph.Test.Frontend.Distil
 
+abbrev TestM := TestT MetaM
+abbrev Test := TestM Unit
+
 private def collectSorrysFromSource (source: String) (options : Frontend.GoalCollectionOptions := {})
-    : MetaM (List GoalState) := do
+    : CoreM (List GoalState) := do
   let (context, state) ← do Frontend.createContextStateFromFile source (env? := ← getEnv)
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
     return (step.before, ← Frontend.collectSorrys step options)
@@ -14,19 +17,19 @@ private def collectSorrysFromSource (source: String) (options : Frontend.GoalCol
   let goalStates ← li.filterMapM λ (env, sorrys) => withEnv env do
     if sorrys.isEmpty then
       return .none
-    let { state, .. } ← Frontend.sorrysToGoalState sorrys
+    let { state, .. } ← (Frontend.sorrysToGoalState sorrys).run'
     return .some state
   return goalStates
 
-private def test_multiple_sorrys_in_proof : TestT MetaM Unit := do
+private def test_multiple_sorrys_in_proof : Test := do
   let sketch := "
 theorem plus_n_Sm_proved_formal_sketch : ∀ n m : Nat, n + (m + 1) = (n + m) + 1 := by
    have h_nat_add_succ: ∀ n m : Nat, n = m := sorry
    sorry
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! "Incorrect number of states"
-  addTest $ LSpec.check "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize) = #[
+  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
     {
       target := { pp? := "∀ (n m : Nat), n = m" },
       vars := #[
@@ -39,17 +42,17 @@ theorem plus_n_Sm_proved_formal_sketch : ∀ n m : Nat, n + (m + 1) = (n + m) + 
         type? := .some { pp? := "∀ (n m : Nat), n = m" },
       }],
     }
-  ])
+  ]
 
-private def test_sorry_in_middle: TestT MetaM Unit := do
+private def test_sorry_in_middle: Test := do
   let sketch := "
 example : ∀ (n m: Nat), n + m = m + n := by
   intros n m
   sorry
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  addTest $ LSpec.check "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize) = #[
+  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
     {
       target := { pp? := "n + m = m + n" },
       vars := #[{
@@ -61,12 +64,12 @@ example : ∀ (n m: Nat), n + m = m + n := by
         }
       ],
     }
-  ])
+  ]
   let .success st _ ← runTermElabMInMeta $ goalState.tryDraft .unfocus "have : 1 + 1 = 2 := by sorry\nsorry"
     | fail "Draft tactic failed"
-  pure ()
+  checkEq "goals" st.goals.length 2
 
-private def test_sorry_in_induction : TestT MetaM Unit := do
+private def test_sorry_in_induction : Test := do
   let sketch := "
 example : ∀ (n m: Nat), n + m = m + n := by
   intros n m
@@ -78,9 +81,9 @@ example : ∀ (n m: Nat), n + m = m + n := by
     have h2 : n + m = m := sorry
     sorry
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  addTest $ LSpec.check "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize) = #[
+  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
     {
       target := { pp? := "0 + m = m" },
       vars := #[{
@@ -129,9 +132,9 @@ example : ∀ (n m: Nat), n + m = m + n := by
         type? := .some { pp? := "n + m = m" },
       }]
     },
-  ])
+  ]
 
-private def test_sorry_in_coupled: TestT MetaM Unit := do
+private def test_sorry_in_coupled: Test := do
   let sketch := "
 example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
   intro y
@@ -139,9 +142,9 @@ example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
   case h => sorry
   case w => sorry
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  addTest $ LSpec.check "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize) = #[
+  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
     {
       target := { pp? := "y + 1 = ?w" },
       vars := #[{
@@ -159,15 +162,15 @@ example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
         }
       ],
     }
-  ])
+  ]
 
-private def test_sorry_with_local_instance (tacticMode : Bool) : TestT MetaM Unit := do
+private def test_sorry_with_local_instance (tacticMode : Bool) : Test := do
   let placeholder := if tacticMode then "by sorry" else "sorry"
   let sketch := s!"
 def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
 example (α : Type) [Inhabited α] : α := {placeholder}
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
   let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test α"
   checkTrue "success" $ result matches .success ..
@@ -181,11 +184,11 @@ example (α : Type) [Inhabited α] : α := {placeholder}
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-private def test_sorry_circular : TestT MetaM Unit := do
+private def test_sorry_circular : Test := do
   let sketch := "
 theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
   let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test"
   checkTrue "failure" $ result matches .failure ..
@@ -199,15 +202,15 @@ theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-private def test_environment_capture: TestT MetaM Unit := do
+private def test_environment_capture: Test := do
   let sketch := "
 def mystery (n: Nat) := n + 1
 
 example (n: Nat) : mystery n + 1 = n + 2 := sorry
   "
-  let goalStates ← (collectSorrysFromSource sketch).run' {}
+  let goalStates ← collectSorrysFromSource sketch
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  addTest $ LSpec.check "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize) = #[
+  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
     {
       target := { pp? := "mystery n + 1 = n + 2" },
       vars := #[{
@@ -215,14 +218,14 @@ example (n: Nat) : mystery n + 1 = n + 2 := sorry
          type? := .some { pp? := "Nat" },
       }],
     }
-  ])
+  ]
 
-private def test_capture_type_mismatch : TestT MetaM Unit := do
+private def test_capture_type_mismatch : Test := do
   let input := "
 def mystery (k: Nat) : Nat := true
   "
   let options := { collectTypeErrors := true }
-  let goalStates ← (collectSorrysFromSource input options).run' {}
+  let goalStates ← collectSorrysFromSource input options
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
   checkEq "goals" ((← goalState.serializeGoals).map (·.devolatilize)) #[
     {
@@ -234,17 +237,16 @@ def mystery (k: Nat) : Nat := true
     }
   ]
 
-def test_capture_type_mismatch_in_binder : TestT MetaM Unit := do
+def test_capture_type_mismatch_in_binder : Test := do
   let input := "
 example (p: Prop) (h: (∀ (x: Prop), Nat) → p): p := h (λ (y: Nat) => 5)
   "
   let options := { collectTypeErrors := true }
-  let goalStates ← (collectSorrysFromSource input options).run' {}
+  let goalStates ← collectSorrysFromSource input options
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
-  ]
+  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[]
 
-private def test_distil_simple : TestT MetaM Unit := do
+private def test_distil_simple : Test := do
   let input := "
 set_option pp.analyze true
 theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
@@ -255,7 +257,7 @@ theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
     | fail "`intro` failed"
   checkEq "goals" state.goals.length 1
 
-private def test_distil_tail : TestT MetaM Unit := do
+private def test_distil_tail : Test := do
   let input := "
 theorem mystery : ∀ (n m: Nat), n + m = m + n := by
   intros n m
@@ -276,7 +278,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
       ],
     }]
 
-private def test_distil_induction : TestT MetaM Unit := do
+private def test_distil_induction : Test := do
   let input := "
 theorem mystery : ∀ (n m: Nat), n + m = m + n := by
   intros n m
@@ -332,7 +334,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
     type? := .some { pp? := type },
   }
 
-private def test_distil_instance (tacticMode : Bool) : TestT MetaM Unit := do
+private def test_distil_instance (tacticMode : Bool) : Test := do
   let placeholder := if tacticMode then "by sorry" else "sorry"
   let input := s!"
 def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
@@ -359,6 +361,7 @@ def mystery (α : Type) [Inhabited α] : α := {placeholder}
   match state? with
   | .success state _ =>
     checkEq "goals" state.goals.length 0
+    checkTrue "root" state.rootExpr?.isSome
   | .failure messages =>
     let messages ← messages.mapM (·.toString)
     checkEq "messages" messages #[];
@@ -368,7 +371,7 @@ def mystery (α : Type) [Inhabited α] : α := {placeholder}
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-private def test_distil_environment_capture : TestT MetaM Unit := do
+private def test_distil_environment_capture : Test := do
   let input := "
 def mystery (n: Nat) := n + 1
 
@@ -387,7 +390,7 @@ theorem property (n: Nat) : mystery n + 1 = n + 2 := sorry
     }
   ]
 
-private def test_distil_circular : TestT MetaM Unit := do
+private def test_distil_circular : Test := do
   let input := "
 theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   "
@@ -406,7 +409,7 @@ theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-private def test_distil_companion : TestT MetaM Unit := do
+private def test_distil_companion : Test := do
   let input := "
 def f : Nat → Nat := sorry
 def g : Nat → Nat := λ x => x + 1
@@ -419,7 +422,7 @@ theorem mystery (n : Nat) : f n = g n := sorry
       target := { pp? := .some "{ f // ∀ (n : Nat), f n = g n }" },
     }]
 
-private def test_distil_multiple_cond : TestT MetaM Unit := do
+private def test_distil_multiple_cond : Test := do
   let input := "
 def f : Nat → Nat := sorry
 theorem mystery1 : f 1 = 1 := sorry
@@ -432,7 +435,7 @@ theorem mystery2 : f 2 = 2 := sorry
       target := { pp? := .some "{ f // f 1 = 1 ∧ f 2 = 2 }" },
     }]
 
-private def test_distil_existing_value : TestT MetaM Unit := do
+private def test_distil_existing_value : Test := do
   let input := "
 def f : Nat → Nat := λ x => x + sorry
 theorem mystery1 : f 1 = 1 := sorry
