@@ -333,9 +333,18 @@ def mystery (α : Type) [Inhabited α] : α := {placeholder}
         },
       ]
     }]
-  let .success state _ ← (state.tryTactic .unfocus "exact test α").run' (ctx := defaultElabContext)
-    | fail "`exact` failed"
-  checkEq "goals" state.goals.length 0
+  let state? ← (state.tryTactic .unfocus "exact test α").run' (ctx := defaultElabContext)
+  match state? with
+  | .success state _ =>
+    checkEq "goals" state.goals.length 0
+  | .failure messages =>
+    let messages ← messages.mapM (·.toString)
+    checkEq "messages" messages #[];
+    fail "failed"
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
 
 def test_distil_environment_capture : TestT MetaM Unit := do
   let input := "

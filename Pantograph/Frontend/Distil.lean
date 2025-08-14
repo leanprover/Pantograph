@@ -203,6 +203,7 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
         let .some value := info.value? | return false
         return value.hasSorry
       if !isSearchTarget then
+        pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
         continue
       let depstr ← extractDependencyStructure decl commands
       modify ({ · with commands := depstr.tail })
