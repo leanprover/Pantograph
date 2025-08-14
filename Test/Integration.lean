@@ -379,13 +379,13 @@ example : 1 + 2 = 3 := rfl
 example (p: Prop): p → p := by simp
 
 def test_frontend_distil_multiple : Test := do
-  let solved := "example : 1 + 2 = 3 := rfl\n"
+  let solved := "theorem solved : 1 + 2 = 3 := rfl\n"
   let withSorry := "theorem mystery (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.3",
+    name := "_uniq.197",
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.2", userName := "p", type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.196", userName := "p", type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.distil"
     ({
