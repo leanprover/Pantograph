@@ -266,7 +266,7 @@ example : ∀ (p: Prop), p → p := by
   intro p h
   exact h
 
-def test_frontend_process : Test := do
+def test_frontend_process_invocations : Test := do
   let file := "example : ∀ (p q: Prop), p → p ∨ q := by\n  intro p q h\n  exact Or.inl h"
   let goal1 := "p q : Prop\nh : p\n⊢ p ∨ q"
   IO.FS.withTempDir λ tempdir => do
@@ -300,43 +300,7 @@ def test_frontend_process : Test := do
         ]
     } ] }
 
-example : 1 + 2 = 3 := rfl
-example (p: Prop): p → p := by simp
-
-def test_frontend_process_sorry : Test := do
-  let solved := "example : 1 + 2 = 3 := rfl\n"
-  let withSorry := "example (p: Prop): p → p := sorry"
-  let file := s!"{solved}{withSorry}"
-  let goal1: Protocol.Goal := {
-    name := "_uniq.3",
-    target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.1", userName := "p", type? := .some { pp? := .some "Prop" }}],
-  }
-  step "frontend.process"
-    ({
-      file? := .some file,
-      sorrys := true,
-    }: Protocol.FrontendProcess)
-   ({
-     units := [{
-       boundary := (0, solved.utf8ByteSize),
-     }, {
-       boundary := (solved.utf8ByteSize, solved.utf8ByteSize + withSorry.utf8ByteSize),
-       goalStateId? := .some 0,
-       goals? := .some #[goal1],
-       goalSrcBoundaries? := .some #[(57, 62)],
-       messages := #[{
-         fileName := defaultFileName,
-         kind := `hasSorry,
-         pos := ⟨2, 0⟩,
-         endPos := .some ⟨2, 7⟩,
-         severity := .warning,
-         data := "declaration uses 'sorry'",
-       }],
-     }],
-   }: Protocol.FrontendProcessResult)
-
-def test_import_open : Test := do
+def test_frontend_process_import_open : Test := do
   let header := "import Init\nopen Nat\nuniverse u"
   let goal1: Protocol.Goal := {
     name := "_uniq.81",
@@ -363,45 +327,6 @@ def test_import_open : Test := do
    ({ nextStateId? := .some 2, goals? := .some #[], }: Protocol.GoalTacticResult)
   step "goal.start" ({ expr := "∀ (x : Sort u), Sort (u + 1)"} : Protocol.GoalStart)
    ({ stateId := 3, root := "_uniq.5" }: Protocol.GoalStartResult)
-
-/-- Ensure there cannot be circular references -/
-def test_frontend_process_circular : Test := do
-  let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
-  let goal1: Protocol.Goal := {
-    name := "_uniq.1",
-    target := { pp? := .some "1 + 2 = 2 + 3" },
-    vars := #[],
-  }
-  step "frontend.process"
-    ({
-      file? := .some withSorry,
-      sorrys := true,
-    }: Protocol.FrontendProcess)
-   ({
-     units := [{
-       boundary := (0, withSorry.utf8ByteSize),
-       goalStateId? := .some 0,
-       goals? := .some #[goal1],
-       goalSrcBoundaries? := .some #[(35, 40)],
-       messages := #[{
-         fileName := defaultFileName,
-         kind := `hasSorry,
-         pos := ⟨1, 8⟩,
-         endPos := .some ⟨1, 15⟩,
-         severity := .warning,
-         data := "declaration uses 'sorry'"
-       }],
-     }],
-   } : Protocol.FrontendProcessResult)
-  step "goal.tactic" ({ stateId := 0, tactic? := .some "exact?" }: Protocol.GoalTactic)
-   ({
-      messages? := .some #[{
-        fileName := ← getFileName,
-        kind := .anonymous,
-        pos := ⟨0, 0⟩,
-        data := "`exact?` could not close the goal. Try `apply?` to see partial suggestions."
-      }]
-    } : Protocol.GoalTacticResult)
 
 def test_frontend_track : Test := do
   step "frontend.track"
@@ -450,6 +375,59 @@ def test_frontend_distil_simple : Test := do
      }],
    } : Protocol.FrontendDistilResult)
 
+example : 1 + 2 = 3 := rfl
+example (p: Prop): p → p := by simp
+
+def test_frontend_distil_multiple : Test := do
+  let solved := "theorem solved : 1 + 2 = 3 := rfl\n"
+  let withSorry := "theorem mystery (p: Prop): p → p := sorry"
+  let file := s!"{solved}{withSorry}"
+  let goal1: Protocol.Goal := {
+    name := "_uniq.197",
+    target := { pp? := .some "p → p" },
+    vars := #[{ name := "_uniq.196", userName := "p", type? := .some { pp? := .some "Prop" }}],
+  }
+  step "frontend.distil"
+    ({
+      file,
+      ignoreValues := false,
+    }: Protocol.FrontendDistil)
+   ({
+     targets := [{
+       stateId := 0,
+       goals := #[goal1],
+     }],
+   }: Protocol.FrontendDistilResult)
+
+/-- Ensure there cannot be circular references -/
+def test_frontend_distil_circular : Test := do
+  let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
+  let goal1: Protocol.Goal := {
+    name := "_uniq.1",
+    target := { pp? := .some "1 + 2 = 2 + 3" },
+    vars := #[],
+  }
+  step "frontend.distil"
+    ({
+      file := withSorry,
+    }: Protocol.FrontendDistil)
+   ({
+     targets := [{
+       stateId := 0,
+       goals := #[goal1],
+     }],
+   } : Protocol.FrontendDistilResult)
+  step "goal.tactic" ({ stateId := 0, tactic? := .some "exact?" }: Protocol.GoalTactic)
+   ({
+      messages? := .some #[{
+        fileName := ← getFileName,
+        kind := .anonymous,
+        pos := ⟨0, 0⟩,
+        data := "`exact?` could not close the goal. Try `apply?` to see partial suggestions."
+      }]
+    } : Protocol.GoalTacticResult)
+
+
 def runTestSuite (env : Lean.Environment) (steps : Test): IO LSpec.TestSeq := do
   -- Setup the environment for execution
   let coreContext ← createCoreContext #[]
@@ -467,12 +445,13 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("Automatic Mode", test_automatic_mode true),
     ("goal.tactic conv", test_conv_calc),
     ("env.add env.inspect", test_env_add_inspect),
-    ("frontend.process invocation", test_frontend_process),
-    ("frontend.process sorry", test_frontend_process_sorry),
-    ("frontend.process import", test_import_open),
-    ("frontend.process circular", test_frontend_process_circular),
+
+    ("frontend.process invocations", test_frontend_process_invocations),
+    ("frontend.process import", test_frontend_process_import_open),
     ("frontend.track", test_frontend_track),
     ("frontend.distil simple", test_frontend_distil_simple),
+    ("frontend.distil multiple", test_frontend_distil_multiple),
+    ("frontend.distil circular", test_frontend_distil_circular),
   ]
   tests.map (fun (name, test) => (name, runTestSuite env test))
 

@@ -57,7 +57,7 @@ def createCoreContext (options: Array String): IO Core.Context := do
     | .ok options => pure options
     | .error e => throw $ IO.userError s!"Options cannot be parsed: {e}"
   return {
-    currNamespace := Name.str .anonymous "Aniva"
+    currNamespace := Name.str .anonymous "Cirno"
     openDecls := [],     -- No 'open' directives needed
     fileName := "<Pantograph>",
     fileMap := { source := "", positions := #[0] },
