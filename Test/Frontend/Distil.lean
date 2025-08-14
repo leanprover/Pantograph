@@ -361,7 +361,7 @@ def mystery (α : Type) [Inhabited α] : α := {placeholder}
   match state? with
   | .success state _ =>
     checkEq "goals" state.goals.length 0
-    checkTrue "root" state.rootExpr?.isSome
+    checkTrue "root" state.isSolved
   | .failure messages =>
     let messages ← messages.mapM (·.toString)
     checkEq "messages" messages #[];
@@ -389,6 +389,10 @@ theorem property (n: Nat) : mystery n + 1 = n + 2 := sorry
       }],
     }
   ]
+  checkFalse "root" state.isSolved
+  let .success state _ ← runTermElabMInMeta do state.tryTactic .unfocus "rfl"
+    | fail "Tactic block failed"
+  checkTrue "root" state.isSolved
 
 private def test_distil_circular : Test := do
   let input := "
@@ -438,8 +442,8 @@ theorem mystery2 : f 2 = 2 := sorry
 private def test_distil_existing_value : Test := do
   let input := "
 def f : Nat → Nat := λ x => x + sorry
-theorem mystery1 : f 1 = 1 := sorry
-theorem mystery2 : f 2 = 2 := sorry
+theorem mystery1 : f 1 = 2 := sorry
+theorem mystery2 : f 2 = 4 := sorry
   "
   let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
     | fail "Incorrect number of search states"
@@ -450,12 +454,17 @@ theorem mystery2 : f 2 = 2 := sorry
         target := { pp? := .some "Nat" },
       },
       {
-        target := { pp? := .some "(fun x => x + ?m.7) 1 = 1" },
+        target := { pp? := .some "(fun x => x + ?m.7) 1 = 2" },
       },
       {
-        target := { pp? := .some "(fun x => x + ?m.7) 2 = 2" },
+        target := { pp? := .some "(fun x => x + ?m.7) 2 = 4" },
       },
     ]
+  checkFalse "root" state.isSolved
+  let .success state _ ← runTermElabMInMeta do state.tryTactic .unfocus "exact x; rfl; rfl"
+    | fail "Tactic block failed"
+  checkEq "goals" state.goals.length 0
+  checkTrue "root" state.isSolved
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
