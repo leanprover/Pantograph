@@ -5,7 +5,7 @@ open Lean Pantograph Frontend
 
 namespace Pantograph.Test.Frontend.Distil
 
-def collectSorrysFromSource (source: String) (options : Frontend.GoalCollectionOptions := {})
+private def collectSorrysFromSource (source: String) (options : Frontend.GoalCollectionOptions := {})
     : MetaM (List GoalState) := do
   let (context, state) ← do Frontend.createContextStateFromFile source (env? := ← getEnv)
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
@@ -18,7 +18,7 @@ def collectSorrysFromSource (source: String) (options : Frontend.GoalCollectionO
     return .some state
   return goalStates
 
-def test_multiple_sorrys_in_proof : TestT MetaM Unit := do
+private def test_multiple_sorrys_in_proof : TestT MetaM Unit := do
   let sketch := "
 theorem plus_n_Sm_proved_formal_sketch : ∀ n m : Nat, n + (m + 1) = (n + m) + 1 := by
    have h_nat_add_succ: ∀ n m : Nat, n = m := sorry
@@ -41,7 +41,7 @@ theorem plus_n_Sm_proved_formal_sketch : ∀ n m : Nat, n + (m + 1) = (n + m) + 
     }
   ])
 
-def test_sorry_in_middle: TestT MetaM Unit := do
+private def test_sorry_in_middle: TestT MetaM Unit := do
   let sketch := "
 example : ∀ (n m: Nat), n + m = m + n := by
   intros n m
@@ -66,7 +66,7 @@ example : ∀ (n m: Nat), n + m = m + n := by
     | fail "Draft tactic failed"
   pure ()
 
-def test_sorry_in_induction : TestT MetaM Unit := do
+private def test_sorry_in_induction : TestT MetaM Unit := do
   let sketch := "
 example : ∀ (n m: Nat), n + m = m + n := by
   intros n m
@@ -128,10 +128,10 @@ example : ∀ (n m: Nat), n + m = m + n := by
         userName := "h2",
         type? := .some { pp? := "n + m = m" },
       }]
-    }
+    },
   ])
 
-def test_sorry_in_coupled: TestT MetaM Unit := do
+private def test_sorry_in_coupled: TestT MetaM Unit := do
   let sketch := "
 example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
   intro y
@@ -161,7 +161,7 @@ example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
     }
   ])
 
-def test_sorry_with_local_instance (tacticMode : Bool) : TestT MetaM Unit := do
+private def test_sorry_with_local_instance (tacticMode : Bool) : TestT MetaM Unit := do
   let placeholder := if tacticMode then "by sorry" else "sorry"
   let sketch := s!"
 def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
@@ -181,7 +181,7 @@ example (α : Type) [Inhabited α] : α := {placeholder}
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-def test_sorry_circular : TestT MetaM Unit := do
+private def test_sorry_circular : TestT MetaM Unit := do
   let sketch := "
 theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   "
@@ -199,7 +199,7 @@ theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-def test_environment_capture: TestT MetaM Unit := do
+private def test_environment_capture: TestT MetaM Unit := do
   let sketch := "
 def mystery (n: Nat) := n + 1
 
@@ -217,7 +217,7 @@ example (n: Nat) : mystery n + 1 = n + 2 := sorry
     }
   ])
 
-def test_capture_type_mismatch : TestT MetaM Unit := do
+private def test_capture_type_mismatch : TestT MetaM Unit := do
   let input := "
 def mystery (k: Nat) : Nat := true
   "
@@ -244,7 +244,7 @@ example (p: Prop) (h: (∀ (x: Prop), Nat) → p): p := h (λ (y: Nat) => 5)
   checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
   ]
 
-def test_distil_simple : TestT MetaM Unit := do
+private def test_distil_simple : TestT MetaM Unit := do
   let input := "
 set_option pp.analyze true
 theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
@@ -255,16 +255,14 @@ theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
     | fail "`intro` failed"
   checkEq "goals" state.goals.length 1
 
-def test_distil_tail : TestT MetaM Unit := do
+private def test_distil_tail : TestT MetaM Unit := do
   let input := "
 theorem mystery : ∀ (n m: Nat), n + m = m + n := by
   intros n m
   sorry
   "
-  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
     | fail "Incorrect number of search states"
-  let .success state _ ← (state.tryTactic .unfocus "intro p q").run' (ctx := defaultElabContext)
-    | fail "`intro` failed"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[{
       target := { pp? := "n + m = m + n" },
@@ -278,39 +276,63 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
       ],
     }]
 
-def test_distil_coupled : TestT MetaM Unit := do
+private def test_distil_induction : TestT MetaM Unit := do
   let input := "
-theorem mystery : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
-  intro y
-  apply Exists.intro
-  case h => sorry
-  case w => sorry
+theorem mystery : ∀ (n m: Nat), n + m = m + n := by
+  intros n m
+  induction n with
+  | zero =>
+    have h1 : 0 + m = m := sorry
+    sorry
+  | succ n ih =>
+    have h2 : n + m = m := sorry
+    sorry
   "
-  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
     | fail "Incorrect number of search states"
-  let .success state _ ← (state.tryTactic .unfocus "intro p q").run' (ctx := defaultElabContext)
-    | fail "`intro` failed"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize)) #[
     {
-      target := { pp? := "y + 1 = ?w" },
-      vars := #[{
-           userName := "y",
-           type? := .some { pp? := "Nat" },
-        }
+      target := { pp? := "n + 1 + m = m + (n + 1)" },
+      vars := #[
+        { var "n✝" "Nat" with isInaccessible := true },
+        var "m" "Nat",
+        var "n" "Nat",
+        var "ih" "n + m = m + n",
+        var "h2" "n + m = m",
       ],
     },
     {
-      userName? := .some "w",
-      target := { pp? := "Nat" },
-      vars := #[{
-           userName := "y",
-           type? := .some { pp? := "Nat" },
-        }
+      target := { pp? := "n + m = m" },
+      vars := #[
+        { var "n✝" "Nat" with isInaccessible := true },
+        var "m" "Nat",
+        var "n" "Nat",
+        var "ih" "n + m = m + n",
       ],
-    }
+    },
+    {
+      target := { pp? := "0 + m = m + 0" },
+      vars := #[
+        var "n" "Nat",
+        var "m" "Nat",
+        var "h1" "0 + m = m",
+      ],
+    },
+    {
+      target := { pp? := "0 + m = m" },
+      vars := #[
+        var "n" "Nat",
+        var "m" "Nat",
+      ],
+    },
   ]
+  where
+  var (userName type : String) : Protocol.Variable := {
+    userName,
+    type? := .some { pp? := type },
+  }
 
-def test_distil_instance (tacticMode : Bool) : TestT MetaM Unit := do
+private def test_distil_instance (tacticMode : Bool) : TestT MetaM Unit := do
   let placeholder := if tacticMode then "by sorry" else "sorry"
   let input := s!"
 def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
@@ -346,7 +368,7 @@ def mystery (α : Type) [Inhabited α] : α := {placeholder}
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-def test_distil_environment_capture : TestT MetaM Unit := do
+private def test_distil_environment_capture : TestT MetaM Unit := do
   let input := "
 def mystery (n: Nat) := n + 1
 
@@ -365,7 +387,7 @@ theorem property (n: Nat) : mystery n + 1 = n + 2 := sorry
     }
   ]
 
-def test_distil_circular : TestT MetaM Unit := do
+private def test_distil_circular : TestT MetaM Unit := do
   let input := "
 theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   "
@@ -384,7 +406,7 @@ theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   | .invalidAction e =>
     fail s!"Invalid action: {e}"
 
-def test_distil_companion : TestT MetaM Unit := do
+private def test_distil_companion : TestT MetaM Unit := do
   let input := "
 def f : Nat → Nat := sorry
 def g : Nat → Nat := λ x => x + 1
@@ -397,7 +419,7 @@ theorem mystery (n : Nat) : f n = g n := sorry
       target := { pp? := .some "{ f // ∀ (n : Nat), f n = g n }" },
     }]
 
-def test_distil_multiple_cond : TestT MetaM Unit := do
+private def test_distil_multiple_cond : TestT MetaM Unit := do
   let input := "
 def f : Nat → Nat := sorry
 theorem mystery1 : f 1 = 1 := sorry
@@ -410,7 +432,7 @@ theorem mystery2 : f 2 = 2 := sorry
       target := { pp? := .some "{ f // f 1 = 1 ∧ f 2 = 2 }" },
     }]
 
-def test_distil_existing_value : TestT MetaM Unit := do
+private def test_distil_existing_value : TestT MetaM Unit := do
   let input := "
 def f : Nat → Nat := λ x => x + sorry
 theorem mystery1 : f 1 = 1 := sorry
@@ -445,6 +467,8 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("capture_type_mismatch", test_capture_type_mismatch),
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
     ("distil simple", test_distil_simple),
+    ("distil tail", test_distil_tail),
+    ("distil induction", test_distil_induction),
     ("distil instance (term)", test_distil_instance false),
     ("distil instance (true)", test_distil_instance true),
     ("distil environment capture", test_distil_environment_capture),
