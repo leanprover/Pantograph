@@ -383,9 +383,9 @@ def test_frontend_distil_multiple : Test := do
   let withSorry := "theorem mystery (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.197",
+    name := "_uniq.195",
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.196", userName := "p", type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.194", userName := "p", type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.distil"
     ({

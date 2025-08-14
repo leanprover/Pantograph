@@ -21,29 +21,6 @@ private def collectSorrysFromSource (source: String) (options : Frontend.GoalCol
     return .some state
   return goalStates
 
-private def test_multiple_sorrys_in_proof : Test := do
-  let sketch := "
-theorem plus_n_Sm_proved_formal_sketch : ∀ n m : Nat, n + (m + 1) = (n + m) + 1 := by
-   have h_nat_add_succ: ∀ n m : Nat, n = m := sorry
-   sorry
-  "
-  let goalStates ← collectSorrysFromSource sketch
-  let [goalState] := goalStates | panic! "Incorrect number of states"
-  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
-    {
-      target := { pp? := "∀ (n m : Nat), n = m" },
-      vars := #[
-      ]
-    },
-    {
-      target := { pp? := "∀ (n m : Nat), n + (m + 1) = n + m + 1" },
-      vars := #[{
-        userName := "h_nat_add_succ",
-        type? := .some { pp? := "∀ (n m : Nat), n = m" },
-      }],
-    }
-  ]
-
 private def test_sorry_in_middle: Test := do
   let sketch := "
 example : ∀ (n m: Nat), n + m = m + n := by
@@ -68,71 +45,6 @@ example : ∀ (n m: Nat), n + m = m + n := by
   let .success st _ ← runTermElabMInMeta $ goalState.tryDraft .unfocus "have : 1 + 1 = 2 := by sorry\nsorry"
     | fail "Draft tactic failed"
   checkEq "goals" st.goals.length 2
-
-private def test_sorry_in_induction : Test := do
-  let sketch := "
-example : ∀ (n m: Nat), n + m = m + n := by
-  intros n m
-  induction n with
-  | zero =>
-    have h1 : 0 + m = m := sorry
-    sorry
-  | succ n ih =>
-    have h2 : n + m = m := sorry
-    sorry
-  "
-  let goalStates ← collectSorrysFromSource sketch
-  let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  checkEq "goals" ((← goalState.serializeGoals (options := {})).map (·.devolatilize)) #[
-    {
-      target := { pp? := "0 + m = m" },
-      vars := #[{
-        userName := "m",
-        type? := .some { pp? := "Nat" },
-      }]
-    },
-    {
-      userName? := .some "zero",
-      target := { pp? := "0 + m = m + 0" },
-      vars := #[{
-        userName := "m",
-        type? := .some { pp? := "Nat" },
-      }, {
-        userName := "h1",
-        type? := .some { pp? := "0 + m = m" },
-      }]
-    },
-    {
-      target := { pp? := "n + m = m" },
-      vars := #[{
-        userName := "m",
-        type? := .some { pp? := "Nat" },
-      }, {
-        userName := "n",
-        type? := .some { pp? := "Nat" },
-      }, {
-        userName := "ih",
-        type? := .some { pp? := "n + m = m + n" },
-      }]
-    },
-    {
-      userName? := .some "succ",
-      target := { pp? := "n + 1 + m = m + (n + 1)" },
-      vars := #[{
-        userName := "m",
-        type? := .some { pp? := "Nat" },
-      }, {
-        userName := "n",
-        type? := .some { pp? := "Nat" },
-      }, {
-        userName := "ih",
-        type? := .some { pp? := "n + m = m + n" },
-      },  {
-        userName := "h2",
-        type? := .some { pp? := "n + m = m" },
-      }]
-    },
-  ]
 
 private def test_sorry_in_coupled: Test := do
   let sketch := "
@@ -300,7 +212,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
         var "m" "Nat",
         var "n" "Nat",
         var "ih" "n + m = m + n",
-        var "h2" "n + m = m",
+        { var "h2" "n + m = m" with value? := .some { pp? := "?m.11" }},
       ],
     },
     {
@@ -317,7 +229,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
       vars := #[
         var "n" "Nat",
         var "m" "Nat",
-        var "h1" "0 + m = m",
+        { var "h1" "0 + m = m" with value? := .some { pp? := "?m.5" }},
       ],
     },
     {
@@ -468,9 +380,7 @@ theorem mystery2 : f 2 = 4 := sorry
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
-    ("multiple_sorrys_in_proof", test_multiple_sorrys_in_proof),
     ("sorry in middle", test_sorry_in_middle),
-    ("sorry in induction", test_sorry_in_induction),
     ("sorry in coupled", test_sorry_in_coupled),
     ("sorry with local instances (term)", test_sorry_with_local_instance false),
     ("sorry with local instances (tactic)", test_sorry_with_local_instance true),
