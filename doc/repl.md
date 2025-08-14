@@ -128,21 +128,15 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   state. The user is responsible to ensure the sender/receiver instances share
   the same environment.
 * `frontend.process { ["fileName": <fileName>,] ["file": <str>], readHeader:
-  <bool>, inheritEnv: <bool>, invocations: <string>, sorrys: <bool>,
-  typeErrorsAsGoals: <bool>, newConstants: <bool> }`:
+  <bool>, inheritEnv: <bool>, invocations: <string>, newConstants: <bool> }`:
   Executes the Lean frontend on a file, collecting the tactic invocations
-  (`"invocations": output-path`).
-
-  DEPRECATED: This can also extract the sorrys and type errors into goal states
-  (`"sorrys": true`), and new constants (`"newConstants": true`). In the case of
-  `sorrys`, this command additionally outputs the position of each captured
-  `sorry`. Conditionally inherit the environment from executing the file.
-  Warning: Behaviour is unstable in case of multiple `sorry`s. Use the draft
-  tactic if possible.
+  (`"invocations": output-path`), or new constants (`newConstants`)
 * `frontend.distil { "file": <str>, ["binderName": <str>], "ignoreValues": bool
   }`: Extract condensed search targets from a file, where coupled search targets
   will be condensed into one. Set `binderName` to override the binder name to
   e.g. `f`. Set `ignoreValues` to false to incorporate existing solutions.
+  
+  Note that `example`s are not search targets!
 * `frontend.track { "src": <str>, "dst": <str> }`: Check if one file conforms to
   another. The declarations in `src` could have `sorry`s and the declarations in
   `dst` would fill them.
