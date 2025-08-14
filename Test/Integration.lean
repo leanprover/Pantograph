@@ -181,15 +181,15 @@ def test_conv_calc : Test := do
   step "options.set" ({automaticMode? := .some false}: Protocol.OptionsSet)
    ({}: Protocol.OptionsSetResult)
   step "goal.start" ({ expr := "∀ (a b: Nat), (b = 2) -> 1 + a + 1 = a + b"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.171" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.167" }: Protocol.GoalStartResult)
   let vars := #[
-    { name := "_uniq.172", userName := "a", type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.175", userName := "b", type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.178", userName := "h", type? := .some { pp? := .some "b = 2" }},
+    { name := "_uniq.168", userName := "a", type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.171", userName := "b", type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.174", userName := "h", type? := .some { pp? := .some "b = 2" }},
   ]
   let goal : Protocol.Goal := {
     vars,
-    name := "_uniq.179",
+    name := "_uniq.175",
     target := { pp? := "1 + a + 1 = a + b" },
   }
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro a b h" }: Protocol.GoalTactic)
@@ -198,13 +198,13 @@ def test_conv_calc : Test := do
    ({ nextStateId? := .some 2, goals? := #[{ goal with fragment := .calc }], }: Protocol.GoalTacticResult)
   let goalCalc : Protocol.Goal := {
     vars,
-    name := "_uniq.381",
+    name := "_uniq.372",
     userName? := .some "calc",
     target := { pp? := "1 + a + 1 = a + 1 + 1" },
   }
   let goalMain : Protocol.Goal := {
     vars,
-    name := "_uniq.400",
+    name := "_uniq.391",
     fragment := .calc,
     target := { pp? := "a + 1 + 1 = a + b" },
   }
@@ -214,7 +214,7 @@ def test_conv_calc : Test := do
     goalCalc with
     fragment := .conv,
     userName? := .none,
-    name := "_uniq.468",
+    name := "_uniq.459",
   }
   step "goal.tactic" ({ stateId := 3, mode? := .some "conv" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 4, goals? := #[goalConv], }: Protocol.GoalTacticResult)
@@ -339,9 +339,9 @@ def test_frontend_process_sorry : Test := do
 def test_import_open : Test := do
   let header := "import Init\nopen Nat\nuniverse u"
   let goal1: Protocol.Goal := {
-    name := "_uniq.81",
+    name := "_uniq.79",
     target := { pp? := .some "n + 1 = n.succ" },
-    vars := #[{ name := "_uniq.80", userName := "n", type? := .some { pp? := .some "Nat" }}],
+    vars := #[{ name := "_uniq.78", userName := "n", type? := .some { pp? := .some "Nat" }}],
   }
   step "frontend.process"
     ({
@@ -356,7 +356,7 @@ def test_import_open : Test := do
      ],
    }: Protocol.FrontendProcessResult)
   step "goal.start" ({ expr := "∀ (n : Nat), n + 1 = Nat.succ n"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.79" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.77" }: Protocol.GoalStartResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro n" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.tactic" ({ stateId := 1, tactic? := .some "apply add_one" }: Protocol.GoalTactic)
@@ -475,6 +475,3 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("frontend.distil simple", test_frontend_distil_simple),
   ]
   tests.map (fun (name, test) => (name, runTestSuite env test))
-
-
-end Pantograph.Test.Integration

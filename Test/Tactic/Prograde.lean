@@ -293,5 +293,3 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("let via assign", test_let false),
     ("let via tryLet", test_let true),
   ] |>.map (λ (name, t) => (name, runTestTermElabM env t))
-
-end Pantograph.Test.Tactic.Prograde
