@@ -145,6 +145,8 @@ def checkEq [DecidableEq α] [Repr α] (desc : String) (lhs rhs : α) : TestT m 
   addTest $ LSpec.check desc (lhs = rhs)
 def checkTrue (desc : String) (flag : Bool) : TestT m Unit := do
   addTest $ LSpec.check desc flag
+def checkFalse (desc : String) (flag : Bool) : TestT m Unit := do
+  addTest $ LSpec.check desc !flag
 def fail (desc : String) : TestT m Unit := do
   addTest $ LSpec.check desc false
 
