@@ -117,7 +117,7 @@ example : (1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3 := by
   simp
 def test_tactic_timeout : Test := do
   step "goal.start" ({ expr := "(1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3" }: Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.370" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.365" }: Protocol.GoalStartResult)
   -- timeout of 10 milliseconds
   step "options.set" ({ timeout? := .some 10 } : Protocol.OptionsSet)
    ({ }: Protocol.OptionsSetResult)

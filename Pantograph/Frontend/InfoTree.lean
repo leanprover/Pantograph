@@ -28,6 +28,7 @@ protected def Info.stx? : Info → Option Syntax
   | .ofChoiceInfo         info => info.stx
   | .ofPartialTermInfo    info => info.stx
   | .ofDelabTermInfo      info => info.stx
+  | .ofErrorNameInfo      info => info.stx
 /-- Is the `Syntax` for this `Lean.Elab.Info` original, or synthetic? -/
 protected def Info.isOriginal (i : Info) : Bool :=
   match i.stx? with
@@ -161,6 +162,7 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
       | .ofChoiceInfo _ => pure "[choice]"
       | .ofPartialTermInfo  _ => pure "[partial_term]"
       | .ofDelabTermInfo _ => pure "[delab_term]"
+      | .ofErrorNameInfo _ => pure "[error_name]"
       let children ← children.toList.mapM λ t' => do
         t'.toString ctx options (indent := indent + 1)
       let children := String.join children

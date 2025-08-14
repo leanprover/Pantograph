@@ -122,7 +122,7 @@ def test_nat_add_comm (manual: Bool): TestM Unit := do
 
 example (w x y z : Nat) (p : Nat → Prop)
         (h : p (x * y + z * w * x)) : p (x * w * z + y * x) := by
-  simp [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm, Nat.mul_comm, Nat.mul_assoc, Nat.mul_left_comm] at *
+  simp [Nat.add_comm, Nat.mul_comm, Nat.mul_left_comm] at *
   assumption
 def test_arith: TestM Unit := do
   let state? ← startProof (.expr "∀ (w x y z : Nat) (p : Nat → Prop) (h : p (x * y + z * w * x)), p (x * w * z + y * x)")
