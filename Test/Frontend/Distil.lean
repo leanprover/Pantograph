@@ -187,7 +187,7 @@ theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   "
   let goalStates ← (collectSorrysFromSource sketch).run' {}
   let [goalState] := goalStates | panic! s!"Incorrect number of states: {goalStates.length}"
-  let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test α"
+  let result ← runTermElabMInMeta $ goalState.tryTactic .unfocus "exact test"
   checkTrue "failure" $ result matches .failure ..
   match result with
   | .success .. =>
@@ -255,6 +255,126 @@ theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
     | fail "`intro` failed"
   checkEq "goals" state.goals.length 1
 
+def test_distil_tail : TestT MetaM Unit := do
+  let input := "
+theorem mystery : ∀ (n m: Nat), n + m = m + n := by
+  intros n m
+  sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  let .success state _ ← (state.tryTactic .unfocus "intro p q").run' (ctx := defaultElabContext)
+    | fail "`intro` failed"
+  checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
+    #[{
+      target := { pp? := "n + m = m + n" },
+      vars := #[{
+           userName := "n",
+           type? := .some { pp? := "Nat" },
+        }, {
+           userName := "m",
+           type? := .some { pp? := "Nat" },
+        }
+      ],
+    }]
+
+def test_distil_coupled : TestT MetaM Unit := do
+  let input := "
+theorem mystery : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
+  intro y
+  apply Exists.intro
+  case h => sorry
+  case w => sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  let .success state _ ← (state.tryTactic .unfocus "intro p q").run' (ctx := defaultElabContext)
+    | fail "`intro` failed"
+  checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize)) #[
+    {
+      target := { pp? := "y + 1 = ?w" },
+      vars := #[{
+           userName := "y",
+           type? := .some { pp? := "Nat" },
+        }
+      ],
+    },
+    {
+      userName? := .some "w",
+      target := { pp? := "Nat" },
+      vars := #[{
+           userName := "y",
+           type? := .some { pp? := "Nat" },
+        }
+      ],
+    }
+  ]
+
+def test_distil_instance (tacticMode : Bool) : TestT MetaM Unit := do
+  let placeholder := if tacticMode then "by sorry" else "sorry"
+  let input := s!"
+def test (α : Type) [s : Inhabited α] : α := @Inhabited.default α s
+def mystery (α : Type) [Inhabited α] : α := {placeholder}
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
+    | fail "Incorrect number of search states"
+  checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
+    #[{
+      target := { pp? := .some "α" },
+      vars := #[
+        {
+          userName := "α",
+          type? := .some { pp? := .some "Type" }
+        },
+        {
+          userName := "inst✝",
+          isInaccessible := true,
+          type? := .some { pp? := .some "Inhabited α" }
+        },
+      ]
+    }]
+  let .success state _ ← (state.tryTactic .unfocus "exact test α").run' (ctx := defaultElabContext)
+    | fail "`exact` failed"
+  checkEq "goals" state.goals.length 0
+
+def test_distil_environment_capture : TestT MetaM Unit := do
+  let input := "
+def mystery (n: Nat) := n + 1
+
+theorem property (n: Nat) : mystery n + 1 = n + 2 := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
+    | fail "Incorrect number of search states"
+  let goals := (← state.serializeGoals).map (·.devolatilize)
+  checkEq "goals" goals #[
+    {
+      target := { pp? := "mystery n + 1 = n + 2" },
+      vars := #[{
+         userName := "n",
+         type? := .some { pp? := "Nat" },
+      }],
+    }
+  ]
+
+def test_distil_circular : TestT MetaM Unit := do
+  let input := "
+theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  let result ← (state.tryTactic .unfocus "exact test p q hp hq").run' (ctx := defaultElabContext)
+  match result with
+  | .success .. =>
+    fail s!"This should not succeed"
+  | .failure messages =>
+    let fileName ← getFileName
+    let messages ← messages.mapM (·.toString)
+    checkEq "failure" messages #[s!"{fileName}:0:0: error: unknown identifier 'test'\n"]
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
+
 def test_distil_companion : TestT MetaM Unit := do
   let input := "
 def f : Nat → Nat := sorry
@@ -316,6 +436,10 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("capture_type_mismatch", test_capture_type_mismatch),
     --("capture_type_mismatch_in_binder", test_capture_type_mismatch_in_binder),
     ("distil simple", test_distil_simple),
+    ("distil instance (term)", test_distil_instance false),
+    ("distil instance (true)", test_distil_instance true),
+    ("distil environment capture", test_distil_environment_capture),
+    ("distil circular", test_distil_circular),
     ("distil companion", test_distil_companion),
     ("distil multiple conditions", test_distil_multiple_cond),
     ("distil existing value", test_distil_existing_value),
