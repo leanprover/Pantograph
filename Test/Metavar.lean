@@ -281,25 +281,54 @@ def test_branch_unification : TestM Unit := do
   let .some root := stateT.rootExpr? | fail "Root expression must exist"
   checkEq "(root)" (toString $ ← Meta.ppExpr root) "fun p q h => ⟨h, Or.inl h⟩"
 
-/-- Test merger when both branches have new aux lemmas -/
-def test_replay_environment : TestM Unit := do
+/-- Test generating multiple aux decls -/
+def test_restore_ngen : TestM Unit := do
   let .ok rootTarget ← elabTerm (← `(term|(2: Nat) ≤ 3 ∧ (3: Nat) ≤ 5)) .none | unreachable!
+  let auxDeclNGen := (← getThe Core.State).auxDeclNGen
   let state ← GoalState.create rootTarget
   let .success state _  ← state.tacticOn' 0 (← `(tactic|apply And.intro)) | fail "apply And.intro failed to run"
   let goal := state.goals[0]!
   let type ← goal.withContext do
     let .ok type ← elabTerm (← `(term|(2: Nat) ≤ 3)) (.some $ .sort 0) | unreachable!
-    pure type
+    instantiateMVars type
+  modifyThe Core.State ({ · with auxDeclNGen })
+  let .success state _  ← state.tryTacticM .unfocus (Tactic.assignWithAuxLemma type) | fail "left"
+
+  state.restoreMetaM
+  let goal := state.goals[0]!
+  let type ← goal.withContext do
+    let .ok type ← elabTerm (← `(term|(3: Nat) ≤ 5)) (.some $ .sort 0) | unreachable!
+    instantiateMVars type
+  modifyThe Core.State ({ · with auxDeclNGen })
+  let .success state _  ← state.tryTacticM .unfocus (Tactic.assignWithAuxLemma type) | fail "right"
+  checkTrue "root" state.isSolved
+  let .some root := state.rootExpr? | fail "Root expression must exist"
+  checkTrue "root has aux lemma" $ root.getUsedConstants.any isAuxLemma
+  checkEq "(root expression)" (toString $ ← Meta.ppExpr root) "⟨_proof_1, _proof_2⟩"
+
+/-- Test merger when both branches have new aux lemmas -/
+def test_replay_environment : TestM Unit := do
+  let .ok rootTarget ← elabTerm (← `(term|(2: Nat) ≤ 3 ∧ (3: Nat) ≤ 5)) .none | unreachable!
+  let auxDeclNGen := (← getThe Core.State).auxDeclNGen
+  let state ← GoalState.create rootTarget
+  let .success state _  ← state.tacticOn' 0 (← `(tactic|apply And.intro)) | fail "apply And.intro failed to run"
+  let goal := state.goals[0]!
+  let type ← goal.withContext do
+    let .ok type ← elabTerm (← `(term|(2: Nat) ≤ 3)) (.some $ .sort 0) | unreachable!
+    instantiateMVars type
+  modifyThe Core.State ({ · with auxDeclNGen })
   let .success state1 _  ← state.tryTacticM goal (Tactic.assignWithAuxLemma type) | fail "left"
 
   state.restoreMetaM
   let goal := state.goals[1]!
   let type ← goal.withContext do
     let .ok type ← elabTerm (← `(term|(3: Nat) ≤ 5)) (.some $ .sort 0) | unreachable!
-    pure type
+    instantiateMVars type
+  modifyThe Core.State ({ · with auxDeclNGen })
   let .success state2 _  ← state.tryTacticM goal (Tactic.assignWithAuxLemma type) | fail "right"
   checkEq "(state1 goals)" state1.goals.length 0
   checkEq "(state2 goals)" state2.goals.length 0
+  /-
   let stateT ← state2.replay state state1
   checkEq "(stateT goals)" stateT.goals.length 0
   let .some root := stateT.rootExpr? | fail "Root expression must exist"
@@ -307,6 +336,7 @@ def test_replay_environment : TestM Unit := do
   checkEq "(root)" (toString $ ← Meta.ppExpr root) "⟨_proof_1, _proof_2⟩"
   let root ← unfoldAuxLemmas root
   checkEq "(root unfold)" (toString $ ← Meta.ppExpr root) "⟨sorry, sorry⟩"
+  -/
 
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
@@ -316,7 +346,8 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Proposition Generation", test_proposition_generation),
     ("Partial Continuation", test_partial_continuation),
     ("Branch Unification", test_branch_unification),
-    --("Replay Environment", test_replay_environment),
+    ("Restore NGen", test_restore_ngen),
+    ("Replay Environment", test_replay_environment),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
 
