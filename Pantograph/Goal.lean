@@ -140,8 +140,8 @@ protected def GoalState.withRootContext { n } [MonadControlT MetaM n] [Monad n] 
   Meta.mapMetaM <| state.withContext' state.root
 
 private def restoreCoreMExtra (state : Core.SavedState) : CoreM Unit :=
-  let { nextMacroScope, ngen, .. } := state
-  modifyThe Core.State ({ · with nextMacroScope, ngen })
+  let { nextMacroScope, ngen, auxDeclNGen, .. } := state
+  modifyThe Core.State ({ · with nextMacroScope, ngen, auxDeclNGen })
 -- Restore the name generator and macro scopes of the core state
 protected def GoalState.restoreCoreMExtra (state: GoalState): CoreM Unit :=
   restoreCoreMExtra state.coreState
