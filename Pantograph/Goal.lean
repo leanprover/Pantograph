@@ -141,7 +141,7 @@ protected def GoalState.withRootContext { n } [MonadControlT MetaM n] [Monad n] 
 /-- Restore name generators and macro scopes, which are not restored normally. -/
 private def restoreCoreMExtra (state : Core.SavedState) : CoreM Unit :=
   let { nextMacroScope, ngen, auxDeclNGen, .. } := state
-  modifyThe Core.State ({ · with nextMacroScope, ngen, auxDeclNGen })
+  modifyThe Core.State ({ · with nextMacroScope, ngen, auxDeclNGen, })
 /-- Restore the name generator and macro scopes of the core state -/
 protected def GoalState.restoreCoreMExtra (state : GoalState) : CoreM Unit :=
   restoreCoreMExtra state.coreState
@@ -492,13 +492,12 @@ private def dumpMessageLog (prevMessageLength : Nat := 0) : CoreM (List Message)
   return newMessages
 
 /-- Execute a `TermElabM` producing a goal state, capturing the error and turn it into a `TacticResult` -/
-def withCapturingError (elabM : Elab.Term.TermElabM GoalState) : Elab.TermElabM TacticResult := do
-  let messageLog ← Core.getMessageLog
-  unless messageLog.toList.isEmpty do
-    IO.eprintln s!"{← messageLog.toList.mapM (·.toString)}"
-    throwError "Message log must be empty at the beginning."
+def withCapturingError { M } [Monad M] [MonadLog M] [MonadError M] [MonadExcept Exception M] [MonadFinally M] [MonadLiftT CoreM M]
+  (m : M GoalState) : M TacticResult := do
+  let cachedMessageLog ← Core.getMessageLog
+  Core.resetMessageLog
   try
-    let state ← elabM
+    let state ← m
 
     -- Check if error messages have been generated in the core.
     let newMessages ← dumpMessageLog
@@ -515,6 +514,8 @@ def withCapturingError (elabM : Elab.Term.TermElabM GoalState) : Elab.TermElabM 
       data := exception.toMessageData,
     }
     return .failure (message :: messages).toArray
+  finally
+    Core.setMessageLog cachedMessageLog
 
 /-- Executes a `TacticM` monad on this `GoalState`, collecting the errors as necessary -/
 protected def GoalState.tryTacticM
