@@ -363,8 +363,10 @@ def test_tactic_failure_synthesize_placeholder : TestM Unit := do
   --  buildGoal [("p", "Prop"), ("q", "Prop"), ("r", "Prop"), ("h", "p → q")] "p ∧ r"
   --]
 
-  let .failure #[_head, message] ← state1.tacticOn 0 tactic
-    | addTest $ assertUnreachable s!"{tactic} should fail with 2 messages"
+  let .failure messages ← state1.tacticOn 0 tactic
+    | fail s!"{tactic} should fail"
+  let #[_head, message] := messages
+    | fail s!"Incorrect message count: {← messages.mapM (·.toString)}"
   checkEq s!"{tactic} fails" (← message.toString)
     s!"{← getFileName}:0:31: error: don't know how to synthesize placeholder\ncontext:\np q r : Prop\nh : p → q\n⊢ p ∧ r\n"
 

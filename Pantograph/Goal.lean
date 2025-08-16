@@ -31,8 +31,7 @@ instance : ToString Site where
 /-- Executes a `TacticM` on a site and return affected goals -/
 protected def Site.runTacticM (site : Site)
   { m } [Monad m] [MonadLiftT Elab.Tactic.TacticM m] [MonadControlT Elab.Tactic.TacticM m] [MonadMCtx m] [MonadError m]
-  (f : m α) : m (α × List MVarId) :=
-  match site with
+  (f : m α) : m (α × List MVarId) := match site with
   | .focus goal => do
     Elab.Tactic.setGoals [goal]
     let a ← f
@@ -139,16 +138,17 @@ protected def GoalState.withParentContext { n } [MonadControlT MetaM n] [Monad n
 protected def GoalState.withRootContext { n } [MonadControlT MetaM n] [Monad n] (state: GoalState): n α → n α :=
   Meta.mapMetaM <| state.withContext' state.root
 
+/-- Restore name generators and macro scopes, which are not restored normally. -/
 private def restoreCoreMExtra (state : Core.SavedState) : CoreM Unit :=
-  let { nextMacroScope, ngen, .. } := state
-  modifyThe Core.State ({ · with nextMacroScope, ngen })
--- Restore the name generator and macro scopes of the core state
-protected def GoalState.restoreCoreMExtra (state: GoalState): CoreM Unit :=
+  let { nextMacroScope, ngen, auxDeclNGen, .. } := state
+  modifyThe Core.State ({ · with nextMacroScope, ngen, auxDeclNGen, })
+/-- Restore the name generator and macro scopes of the core state -/
+protected def GoalState.restoreCoreMExtra (state : GoalState) : CoreM Unit :=
   restoreCoreMExtra state.coreState
-protected def GoalState.restoreMetaM (state: GoalState): MetaM Unit := do
+protected def GoalState.restoreMetaM (state : GoalState) : MetaM Unit := do
   state.restoreCoreMExtra
   state.savedState.term.meta.restore
-protected def GoalState.restoreElabM (state: GoalState): Elab.TermElabM Unit := do
+protected def GoalState.restoreElabM (state : GoalState) : Elab.TermElabM Unit := do
   state.restoreCoreMExtra
   state.savedState.term.restore
 
@@ -190,6 +190,7 @@ protected def GoalState.rootExpr? (goalState : GoalState) : Option Expr := do
   let expr ← goalState.mctx.eAssignment.find? goalState.root
   let (expr, _) := instantiateMVarsCore (mctx := goalState.mctx) (e := expr)
   return expr
+/-- Returns true if the root expression has no mvars, or if there is no root -/
 @[export pantograph_goal_state_is_solved]
 protected def GoalState.isSolved (goalState : GoalState) : Bool :=
   let solvedRoot := match goalState.rootExpr? with
@@ -491,13 +492,12 @@ private def dumpMessageLog (prevMessageLength : Nat := 0) : CoreM (List Message)
   return newMessages
 
 /-- Execute a `TermElabM` producing a goal state, capturing the error and turn it into a `TacticResult` -/
-def withCapturingError (elabM : Elab.Term.TermElabM GoalState) : Elab.TermElabM TacticResult := do
-  let messageLog ← Core.getMessageLog
-  unless messageLog.toList.isEmpty do
-    IO.eprintln s!"{← messageLog.toList.mapM (·.toString)}"
-    throwError "Message log must be empty at the beginning."
+def withCapturingError { M } [Monad M] [MonadLog M] [MonadError M] [MonadExcept Exception M] [MonadFinally M] [MonadLiftT CoreM M]
+  (m : M GoalState) : M TacticResult := do
+  let cachedMessageLog ← Core.getMessageLog
+  Core.resetMessageLog
   try
-    let state ← elabM
+    let state ← m
 
     -- Check if error messages have been generated in the core.
     let newMessages ← dumpMessageLog
@@ -514,6 +514,8 @@ def withCapturingError (elabM : Elab.Term.TermElabM GoalState) : Elab.TermElabM 
       data := exception.toMessageData,
     }
     return .failure (message :: messages).toArray
+  finally
+    Core.setMessageLog cachedMessageLog
 
 /-- Executes a `TacticM` monad on this `GoalState`, collecting the errors as necessary -/
 protected def GoalState.tryTacticM
@@ -629,5 +631,3 @@ protected def GoalState.calcEnter (state : GoalState) (site : Site)
 
 initialize
   registerTraceClass `Pantograph.GoalState.replay
-
-end Pantograph

@@ -317,9 +317,8 @@ theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   | .success .. =>
     fail s!"This should not succeed"
   | .failure messages =>
-    let fileName ← getFileName
     let messages ← messages.mapM (·.toString)
-    checkEq "failure" messages #[s!"{fileName}:0:0: error: unknown identifier 'test'\n"]
+    checkEq "failure" messages #[s!"{← getFileName}:0:0: error: unknown identifier 'test'\n"]
   | .parseError e =>
     fail s!"Parse error: {e}"
   | .invalidAction e =>
