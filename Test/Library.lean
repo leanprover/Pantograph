@@ -37,5 +37,3 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   [
     ("expr_echo", test_expr_echo env),
   ]
-
-end Pantograph.Test.Library
