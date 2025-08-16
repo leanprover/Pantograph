@@ -303,6 +303,17 @@ def test_or_comm: TestM Unit := do
       ]
     }
 
+def test_exact_messages : TestM Unit := do
+  let rootExpr ← parseSentence "1 + 2 = 2 + 3"
+  let state0 ← GoalState.create rootExpr
+  let tactic := "exact?"
+  let state1? ← state0.tacticOn (goalId := 0) (tactic := tactic)
+  let .failure messages := state1? | fail "Must fail"
+  checkEq "messages"
+    (← messages.mapM (·.toString))
+    #[s!"{← getFileName}:0:0: error: `exact?` could not close the goal. Try `apply?` to see partial suggestions.\n"]
+
+
 def test_tactic_failure_unresolved_goals : TestM Unit := do
   let state? ← startProof (.expr "∀ (p : Nat → Prop), ∃ (x : Nat), p (0 + x + 0)")
   let state0 ← match state? with
@@ -413,6 +424,7 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Nat.add_comm manual", test_nat_add_comm true),
     ("arithmetic", test_arith),
     ("Or.comm", test_or_comm),
+    ("exact? message", test_exact_messages),
     ("tactic failure with unresolved goals", test_tactic_failure_unresolved_goals),
     ("tactic failure with synthesize placeholder", test_tactic_failure_synthesize_placeholder),
     ("implicit arg in target", test_implicit_arg_target),

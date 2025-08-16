@@ -454,6 +454,3 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("frontend.distil circular", test_frontend_distil_circular),
   ]
   tests.map (fun (name, test) => (name, runTestSuite env test))
-
-
-end Pantograph.Test.Integration

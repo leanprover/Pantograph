@@ -130,5 +130,3 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Projection Exists", test_projection_exists env),
     ("Matcher", runTestTermElabM env test_matcher),
   ]
-
-end Pantograph.Test.Delate

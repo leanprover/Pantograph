@@ -29,5 +29,3 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   [
     ("draft", test_draft),
   ] |>.map (λ (name, t) => (name, runTestTermElabM env t))
-
-end Pantograph.Test.Tactic.Assign

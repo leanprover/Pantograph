@@ -350,5 +350,3 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Replay Environment", test_replay_environment),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
-
-end Pantograph.Test.Metavar
