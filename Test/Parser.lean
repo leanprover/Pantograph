@@ -17,5 +17,3 @@ def suite (env : Environment) : List (String × IO LSpec.TestSeq) :=
   [
     ("runParserCategory", test_runParserCategory),
   ] |>.map (λ (name, t) => (name, runTestTermElabM env t))
-
-end Pantograph.Test.Parser
