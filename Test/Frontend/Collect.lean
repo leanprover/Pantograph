@@ -160,7 +160,7 @@ def x : Nat := sorry
   "
   let .error e ← checkFileConflicts env src src
     | fail "Must fail"
-  checkEq "message" e "Definition value has sorry: x._cstage1"
+  checkEq "message" e "Definition value has sorry: x"
 def test_conflict_fail_delete_definition : Test := λ env => do
   let src := "
 def x : Nat := sorry

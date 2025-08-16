@@ -278,7 +278,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
     else
       return ldecl
 
-  let { term := savedTerm@{ meta := savedMeta@{ core, meta := meta@{ mctx, .. } }, .. }, .. } := dst.savedState
+  let { term := savedTerm@{ «meta» := savedMeta@{ core, «meta» := «meta»@{ mctx, .. } }, .. }, .. } := dst.savedState
   trace[Pantograph.GoalState.replay] "Merging mvars {src.mctx.mvarCounter} -> ({src'.mctx.mvarCounter}, {dst.mctx.mvarCounter})"
   let mctx := {
     mctx with
@@ -346,8 +346,8 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       -- Reset the message log when declaration uses `sorry`
       messages := {}
     }
-    meta := {
-      meta with
+    «meta» := {
+      «meta» with
       mctx,
     }
   }
@@ -400,7 +400,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       },
       term := {
         savedTerm with
-        meta := ← m.run',
+        «meta» := ← m.run',
       },
     },
     parentMVars := dst.parentMVars ++ src.parentMVars.map mapMVar,
