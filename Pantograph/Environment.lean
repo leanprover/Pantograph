@@ -9,11 +9,21 @@ open Pantograph
 
 namespace Pantograph
 
-def isAuxLemma (n : Name) : Bool :=
+@[always_inline]
+def getAuxLemmaPrefix? (n : Name) : Option String :=
   match n with
   -- `mkAuxLemma` generally allows for arbitrary prefixes but these are the ones produced by core.
-  | .str _ s => "_proof_".isPrefixOf s || "_simp_".isPrefixOf s
-  | _ => false
+  | .str _ s =>
+    if "_proof_".isPrefixOf s then
+      .some "_proof"
+    else if "_simp_".isPrefixOf s then
+      some "_simp"
+    else
+      none
+  | _ => .none
+@[always_inline]
+def isAuxLemma (n : Name) : Bool :=
+  getAuxLemmaPrefix? n |>.isSome
 
 @[export pantograph_is_name_internal]
 def isNameInternal (n: Name): Bool :=
@@ -140,8 +150,81 @@ def checkEnvConflicts (src src' dst : Environment) : ExceptT String IO Environme
     | _, _ => return false
 
 /-- Add constants to the environment, renaming the constants if necessary -/
-def replayConstantsRenaming (constants : Std.HashMap Name ConstantInfo) : CoreM (Std.HashMap Name Name) := do
+def replayConstantsRenaming (constants : Std.HashMap Name ConstantInfo) : CoreM (NameMap Name) := do
+  let env ← getEnv
+  let nameMap ← constants.foldM (init := .empty) λ acc name _ => do
+    unless env.contains name do
+      return acc
+    let name' ← if let .some pref := getAuxLemmaPrefix? name then
+        mkAuxDeclName (kind := .str .anonymous pref)
+      else
+        mkAuxDeclName (kind := name)
+    return acc.insert name name'
+  -- Remap constants
+  let replaceConst (expr : Expr) : CoreM Expr := Core.transform expr λ
+    | .const n levels =>
+      let n' := nameMap.findD n n
+      return .done (.const n' levels)
+    | e =>
+      return .continue e
+  let constants ← constants.foldM (init := .emptyWithCapacity constants.size) λ acc name info => do
+    let info' ← match info with
+      | .axiomInfo val@{ name, type, .. } =>
+        pure <| .axiomInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+        }
+      | .defnInfo val@{ name, type, value, .. } =>
+        pure <| .defnInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+          value := ← replaceConst value,
+        }
+      | .thmInfo val@{ name, type, value, .. } =>
+        pure <| .thmInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+          value := ← replaceConst value,
+        }
+      | .opaqueInfo val@{ name, type, value, .. } =>
+        pure <| .opaqueInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+          value := ← replaceConst value,
+        }
+      | .quotInfo val@{ name, type, .. } =>
+        pure <| .quotInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+        }
+      | .inductInfo val@{ name, type, all, ctors, .. } =>
+        pure <| .inductInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+          all := all.map λ n => nameMap.findD n n,
+          ctors := ctors.map λ n => nameMap.findD n n,
+        }
+      | .ctorInfo val@{ name, type, induct, .. } =>
+        pure <| .ctorInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+          induct := nameMap.findD induct induct
+        }
+      | .recInfo val@{ name, type, all, .. } =>
+        pure <| .recInfo {
+          val with
+          name := nameMap.findD name name,
+          type := ← replaceConst type,
+          all := all.map λ n => nameMap.findD n n,
+        }
+    return acc.insert name info'
   let env' ← (← getEnv).replay constants
   setEnv env'
-  -- FIXME: Deduplicate
-  return .emptyWithCapacity 2
+  return nameMap
