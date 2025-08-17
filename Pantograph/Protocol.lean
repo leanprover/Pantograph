@@ -365,10 +365,9 @@ structure GoalLoadResult where
   id: Nat
   deriving Lean.ToJson
 
-
 /-- Executes the Lean compiler on a single file -/
 structure FrontendProcess where
-  -- One of these two must be supplied: Either supply the file name or the content.
+  -- At least one of these two must be supplied
   fileName?: Option String := .none
   file?: Option String := .none
   -- Whether to read the header
@@ -377,10 +376,6 @@ structure FrontendProcess where
   inheritEnv : Bool := false
   -- collect tactic invocations and output to a given file
   invocations?: Option String := .none
-  -- collect `sorry`s
-  sorrys: Bool := false
-  -- collect type errors
-  typeErrorsAsGoals: Bool := false
   -- list new constants from each compilation step
   newConstants: Bool := false
   deriving Lean.FromJson
@@ -399,10 +394,6 @@ structure CompilationUnit where
   messages: Array Lean.SerialMessage := #[]
   -- Number of tactic invocations
   nInvocations?: Option Nat := .none
-  goalStateId?: Option Nat := .none
-  goals?: Option (Array Goal) := .none
-  -- Code segments which generated the goals
-  goalSrcBoundaries?: Option (Array (Nat × Nat)) := .none
 
   -- New constants defined in compilation unit
   newConstants?: Option (Array String) := .none
@@ -421,8 +412,12 @@ structure FrontendData where
 
 structure FrontendDistil where
   file : String
-  -- If true, override binder name
-  binderName? : Option String
+  /-- If true, override default binder name which is generated from definition
+  names -/
+  binderName? : Option String := .none
+  /-- If set to true, the values of search targets are discarded. Otherwise they
+  will be incorporated into the generated goal state. -/
+  ignoreValues : Bool := true
   deriving Lean.FromJson
 structure FrontendDistilSearchTarget where
   stateId : Nat

@@ -112,5 +112,3 @@ def suite (env : Environment) : List (String × IO LSpec.TestSeq) :=
     ("Symbol Location", runTest $ test_symbol_location env),
     ("Matcher", runTest $ test_matcher env),
   ]
-
-end Pantograph.Test.Environment

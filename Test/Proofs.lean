@@ -122,7 +122,7 @@ def test_nat_add_comm (manual: Bool): TestM Unit := do
 
 example (w x y z : Nat) (p : Nat → Prop)
         (h : p (x * y + z * w * x)) : p (x * w * z + y * x) := by
-  simp [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm, Nat.mul_comm, Nat.mul_assoc, Nat.mul_left_comm] at *
+  simp [Nat.add_comm, Nat.mul_comm, Nat.mul_left_comm] at *
   assumption
 def test_arith: TestM Unit := do
   let state? ← startProof (.expr "∀ (w x y z : Nat) (p : Nat → Prop) (h : p (x * y + z * w * x)), p (x * w * z + y * x)")
@@ -303,6 +303,17 @@ def test_or_comm: TestM Unit := do
       ]
     }
 
+def test_exact_messages : TestM Unit := do
+  let rootExpr ← parseSentence "1 + 2 = 2 + 3"
+  let state0 ← GoalState.create rootExpr
+  let tactic := "exact?"
+  let state1? ← state0.tacticOn (goalId := 0) (tactic := tactic)
+  let .failure messages := state1? | fail "Must fail"
+  checkEq "messages"
+    (← messages.mapM (·.toString))
+    #[s!"{← getFileName}:0:0: error: `exact?` could not close the goal. Try `apply?` to see partial suggestions.\n"]
+
+
 def test_tactic_failure_unresolved_goals : TestM Unit := do
   let state? ← startProof (.expr "∀ (p : Nat → Prop), ∃ (x : Nat), p (0 + x + 0)")
   let state0 ← match state? with
@@ -352,8 +363,10 @@ def test_tactic_failure_synthesize_placeholder : TestM Unit := do
   --  buildGoal [("p", "Prop"), ("q", "Prop"), ("r", "Prop"), ("h", "p → q")] "p ∧ r"
   --]
 
-  let .failure #[_head, message] ← state1.tacticOn 0 tactic
-    | addTest $ assertUnreachable s!"{tactic} should fail with 2 messages"
+  let .failure messages ← state1.tacticOn 0 tactic
+    | fail s!"{tactic} should fail"
+  let #[_head, message] := messages
+    | fail s!"Incorrect message count: {← messages.mapM (·.toString)}"
   checkEq s!"{tactic} fails" (← message.toString)
     s!"{← getFileName}:0:31: error: don't know how to synthesize placeholder\ncontext:\np q r : Prop\nh : p → q\n⊢ p ∧ r\n"
 
@@ -411,6 +424,7 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Nat.add_comm manual", test_nat_add_comm true),
     ("arithmetic", test_arith),
     ("Or.comm", test_or_comm),
+    ("exact? message", test_exact_messages),
     ("tactic failure with unresolved goals", test_tactic_failure_unresolved_goals),
     ("tactic failure with synthesize placeholder", test_tactic_failure_synthesize_placeholder),
     ("implicit arg in target", test_implicit_arg_target),
@@ -420,7 +434,3 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("tacticSeq placeholder", test_tactic_seq_placeholder),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
-
-
-
-end Pantograph.Test.Proofs

@@ -119,7 +119,7 @@ structure CompactGoalState where
   env : DistilledEnvironment
 
   core : CompactCoreState
-  meta : Meta.State
+  «meta» : Meta.State
   «elab» : Elab.Term.State
   tactic : Elab.Tactic.State
   root : MVarId
@@ -137,11 +137,11 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
   let {
     savedState := {
       term := {
-        meta := {
+        «meta» := {
           core := {
             env, nextMacroScope, ngen, auxDeclNGen, ..
           },
-          meta,
+          «meta»,
         }
         «elab» := «elab»@{
           syntheticMVars, ..
@@ -164,7 +164,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     env := distilEnvironment env background?,
 
     core := { nextMacroScope, ngen, auxDeclNGen },
-    meta,
+    «meta»,
     «elab» := { «elab» with syntheticMVars },
     tactic,
 
@@ -188,7 +188,7 @@ def goalStateUnpickle (path : System.FilePath) (background? : Option Environment
     env,
 
     core,
-    meta,
+    «meta»,
     «elab»,
     tactic,
 
@@ -200,13 +200,13 @@ def goalStateUnpickle (path : System.FilePath) (background? : Option Environment
   let goalState := {
     savedState := {
       term := {
-        meta := {
+        «meta» := {
           core := {
             core with
             passedHeartbeats := 0,
             env,
           },
-          meta,
+          «meta»,
         },
         «elab»,
       },

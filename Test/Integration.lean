@@ -117,7 +117,7 @@ example : (1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3 := by
   simp
 def test_tactic_timeout : Test := do
   step "goal.start" ({ expr := "(1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3" }: Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.370" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.365" }: Protocol.GoalStartResult)
   -- timeout of 10 milliseconds
   step "options.set" ({ timeout? := .some 10 } : Protocol.OptionsSet)
    ({ }: Protocol.OptionsSetResult)
@@ -181,15 +181,15 @@ def test_conv_calc : Test := do
   step "options.set" ({automaticMode? := .some false}: Protocol.OptionsSet)
    ({}: Protocol.OptionsSetResult)
   step "goal.start" ({ expr := "∀ (a b: Nat), (b = 2) -> 1 + a + 1 = a + b"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.171" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.167" }: Protocol.GoalStartResult)
   let vars := #[
-    { name := "_uniq.172", userName := "a", type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.175", userName := "b", type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.178", userName := "h", type? := .some { pp? := .some "b = 2" }},
+    { name := "_uniq.168", userName := "a", type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.171", userName := "b", type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.174", userName := "h", type? := .some { pp? := .some "b = 2" }},
   ]
   let goal : Protocol.Goal := {
     vars,
-    name := "_uniq.179",
+    name := "_uniq.175",
     target := { pp? := "1 + a + 1 = a + b" },
   }
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro a b h" }: Protocol.GoalTactic)
@@ -198,13 +198,13 @@ def test_conv_calc : Test := do
    ({ nextStateId? := .some 2, goals? := #[{ goal with fragment := .calc }], }: Protocol.GoalTacticResult)
   let goalCalc : Protocol.Goal := {
     vars,
-    name := "_uniq.381",
+    name := "_uniq.372",
     userName? := .some "calc",
     target := { pp? := "1 + a + 1 = a + 1 + 1" },
   }
   let goalMain : Protocol.Goal := {
     vars,
-    name := "_uniq.400",
+    name := "_uniq.391",
     fragment := .calc,
     target := { pp? := "a + 1 + 1 = a + b" },
   }
@@ -214,7 +214,7 @@ def test_conv_calc : Test := do
     goalCalc with
     fragment := .conv,
     userName? := .none,
-    name := "_uniq.468",
+    name := "_uniq.459",
   }
   step "goal.tactic" ({ stateId := 3, mode? := .some "conv" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 4, goals? := #[goalConv], }: Protocol.GoalTacticResult)
@@ -266,7 +266,7 @@ example : ∀ (p: Prop), p → p := by
   intro p h
   exact h
 
-def test_frontend_process : Test := do
+def test_frontend_process_invocations : Test := do
   let file := "example : ∀ (p q: Prop), p → p ∨ q := by\n  intro p q h\n  exact Or.inl h"
   let goal1 := "p q : Prop\nh : p\n⊢ p ∨ q"
   IO.FS.withTempDir λ tempdir => do
@@ -300,48 +300,12 @@ def test_frontend_process : Test := do
         ]
     } ] }
 
-example : 1 + 2 = 3 := rfl
-example (p: Prop): p → p := by simp
-
-def test_frontend_process_sorry : Test := do
-  let solved := "example : 1 + 2 = 3 := rfl\n"
-  let withSorry := "example (p: Prop): p → p := sorry"
-  let file := s!"{solved}{withSorry}"
-  let goal1: Protocol.Goal := {
-    name := "_uniq.3",
-    target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.1", userName := "p", type? := .some { pp? := .some "Prop" }}],
-  }
-  step "frontend.process"
-    ({
-      file? := .some file,
-      sorrys := true,
-    }: Protocol.FrontendProcess)
-   ({
-     units := [{
-       boundary := (0, solved.utf8ByteSize),
-     }, {
-       boundary := (solved.utf8ByteSize, solved.utf8ByteSize + withSorry.utf8ByteSize),
-       goalStateId? := .some 0,
-       goals? := .some #[goal1],
-       goalSrcBoundaries? := .some #[(57, 62)],
-       messages := #[{
-         fileName := defaultFileName,
-         kind := `hasSorry,
-         pos := ⟨2, 0⟩,
-         endPos := .some ⟨2, 7⟩,
-         severity := .warning,
-         data := "declaration uses 'sorry'",
-       }],
-     }],
-   }: Protocol.FrontendProcessResult)
-
-def test_import_open : Test := do
+def test_frontend_process_import_open : Test := do
   let header := "import Init\nopen Nat\nuniverse u"
   let goal1: Protocol.Goal := {
-    name := "_uniq.81",
+    name := "_uniq.79",
     target := { pp? := .some "n + 1 = n.succ" },
-    vars := #[{ name := "_uniq.80", userName := "n", type? := .some { pp? := .some "Nat" }}],
+    vars := #[{ name := "_uniq.78", userName := "n", type? := .some { pp? := .some "Nat" }}],
   }
   step "frontend.process"
     ({
@@ -356,52 +320,13 @@ def test_import_open : Test := do
      ],
    }: Protocol.FrontendProcessResult)
   step "goal.start" ({ expr := "∀ (n : Nat), n + 1 = Nat.succ n"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.79" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.77" }: Protocol.GoalStartResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro n" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.tactic" ({ stateId := 1, tactic? := .some "apply add_one" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 2, goals? := .some #[], }: Protocol.GoalTacticResult)
   step "goal.start" ({ expr := "∀ (x : Sort u), Sort (u + 1)"} : Protocol.GoalStart)
    ({ stateId := 3, root := "_uniq.5" }: Protocol.GoalStartResult)
-
-/-- Ensure there cannot be circular references -/
-def test_frontend_process_circular : Test := do
-  let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
-  let goal1: Protocol.Goal := {
-    name := "_uniq.1",
-    target := { pp? := .some "1 + 2 = 2 + 3" },
-    vars := #[],
-  }
-  step "frontend.process"
-    ({
-      file? := .some withSorry,
-      sorrys := true,
-    }: Protocol.FrontendProcess)
-   ({
-     units := [{
-       boundary := (0, withSorry.utf8ByteSize),
-       goalStateId? := .some 0,
-       goals? := .some #[goal1],
-       goalSrcBoundaries? := .some #[(35, 40)],
-       messages := #[{
-         fileName := defaultFileName,
-         kind := `hasSorry,
-         pos := ⟨1, 8⟩,
-         endPos := .some ⟨1, 15⟩,
-         severity := .warning,
-         data := "declaration uses 'sorry'"
-       }],
-     }],
-   } : Protocol.FrontendProcessResult)
-  step "goal.tactic" ({ stateId := 0, tactic? := .some "exact?" }: Protocol.GoalTactic)
-   ({
-      messages? := .some #[{
-        fileName := ← getFileName,
-        kind := .anonymous,
-        pos := ⟨0, 0⟩,
-        data := "`exact?` could not close the goal. Try `apply?` to see partial suggestions."
-      }]
-    } : Protocol.GoalTacticResult)
 
 def test_frontend_track : Test := do
   step "frontend.track"
@@ -450,6 +375,59 @@ def test_frontend_distil_simple : Test := do
      }],
    } : Protocol.FrontendDistilResult)
 
+example : 1 + 2 = 3 := rfl
+example (p: Prop): p → p := by simp
+
+def test_frontend_distil_multiple : Test := do
+  let solved := "theorem solved : 1 + 2 = 3 := rfl\n"
+  let withSorry := "theorem mystery (p: Prop): p → p := sorry"
+  let file := s!"{solved}{withSorry}"
+  let goal1: Protocol.Goal := {
+    name := "_uniq.195",
+    target := { pp? := .some "p → p" },
+    vars := #[{ name := "_uniq.194", userName := "p", type? := .some { pp? := .some "Prop" }}],
+  }
+  step "frontend.distil"
+    ({
+      file,
+      ignoreValues := false,
+    }: Protocol.FrontendDistil)
+   ({
+     targets := [{
+       stateId := 0,
+       goals := #[goal1],
+     }],
+   }: Protocol.FrontendDistilResult)
+
+/-- Ensure there cannot be circular references -/
+def test_frontend_distil_circular : Test := do
+  let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
+  let goal1: Protocol.Goal := {
+    name := "_uniq.1",
+    target := { pp? := .some "1 + 2 = 2 + 3" },
+    vars := #[],
+  }
+  step "frontend.distil"
+    ({
+      file := withSorry,
+    }: Protocol.FrontendDistil)
+   ({
+     targets := [{
+       stateId := 0,
+       goals := #[goal1],
+     }],
+   } : Protocol.FrontendDistilResult)
+  step "goal.tactic" ({ stateId := 0, tactic? := .some "exact?" }: Protocol.GoalTactic)
+   ({
+      messages? := .some #[{
+        fileName := ← getFileName,
+        kind := .anonymous,
+        pos := ⟨0, 0⟩,
+        data := "`exact?` could not close the goal. Try `apply?` to see partial suggestions."
+      }]
+    } : Protocol.GoalTacticResult)
+
+
 def runTestSuite (env : Lean.Environment) (steps : Test): IO LSpec.TestSeq := do
   -- Setup the environment for execution
   let coreContext ← createCoreContext #[]
@@ -467,14 +445,12 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("Automatic Mode", test_automatic_mode true),
     ("goal.tactic conv", test_conv_calc),
     ("env.add env.inspect", test_env_add_inspect),
-    ("frontend.process invocation", test_frontend_process),
-    ("frontend.process sorry", test_frontend_process_sorry),
-    ("frontend.process import", test_import_open),
-    ("frontend.process circular", test_frontend_process_circular),
+
+    ("frontend.process invocations", test_frontend_process_invocations),
+    ("frontend.process import", test_frontend_process_import_open),
     ("frontend.track", test_frontend_track),
     ("frontend.distil simple", test_frontend_distil_simple),
+    ("frontend.distil multiple", test_frontend_distil_multiple),
+    ("frontend.distil circular", test_frontend_distil_circular),
   ]
   tests.map (fun (name, test) => (name, runTestSuite env test))
-
-
-end Pantograph.Test.Integration

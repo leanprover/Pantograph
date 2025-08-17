@@ -178,7 +178,11 @@ end Goal
 section Frontend
 
 def frontend_distil (args: Protocol.FrontendDistil): EMainM Protocol.FrontendDistilResult := do
-  let targets ← Frontend.distilSearchTargets (← getEnv) args.file { binderName? := args.binderName?.map (·.toName) }
+  let config := {
+    binderName? := args.binderName?.map (·.toName),
+    ignoreValues := args.ignoreValues,
+  }
+  let targets ← Frontend.distilSearchTargets (← getEnv) args.file config
   let targets ← targets.mapM λ _dst@{ goalState } => do
     let stateId ← newGoalState goalState
     let goals ← runCoreM $ goalState.serializeGoals (options := (← get).options) |>.run'
@@ -190,14 +194,12 @@ structure CompilationUnit where
   env : Environment
   boundary : Nat × Nat
   invocations : List Protocol.InvokedTactic
-  sorrys : List Frontend.InfoWithContext
   messages : Array SerialMessage
   newConstants : NameSet
 
 export Frontend (defaultFileName)
 
 def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendProcessResult := do
-  let options := (← getMainState).options
   let (fileName, file) ← match args.fileName?, args.file? with
     | .some fileName, .none => do
       let file ← IO.FS.readFile fileName
@@ -217,10 +219,6 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
         Frontend.collectTacticsFromCompilationStep step
       else
         pure []
-    let sorrys ← if args.sorrys then
-        Frontend.collectSorrys step (options := { collectTypeErrors := args.typeErrorsAsGoals })
-      else
-        pure []
     let messages ← step.msgs.toArray.mapM (·.serialize)
     let newConstants ← if args.newConstants then
         step.newConstants
@@ -230,7 +228,6 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
       env := step.before,
       boundary,
       invocations,
-      sorrys,
       messages,
       newConstants
     }
@@ -241,7 +238,7 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
   if args.inheritEnv then
     setEnv state'.commandState.env
     if let .some scope := state'.commandState.scopes.head? then
-      -- modify the scope
+      -- modify the scope to take into account `open` statements
       set { ← getMainState with scope }
   if let .some fileName := args.invocations? then
     let units := li.map λ unit => { invocations? := .some unit.invocations }
@@ -252,24 +249,11 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
         .some $ step.newConstants.toArray.map λ name => name.toString
       else
         .none
-    let (goalStateId?, goals?, goalSrcBoundaries?) ← if step.sorrys.isEmpty then
-        pure (.none, .none, .none)
-      else do
-        let ({ state, srcBoundaries }, goals) ← liftMetaM do
-          let result@{state, .. } ← Frontend.sorrysToGoalState step.sorrys
-          let goals ← goalSerialize state options
-          pure (result, goals)
-        let stateId ← newGoalState state
-        let srcBoundaries := srcBoundaries.toArray.map (λ (b, e) => (b.byteIdx, e.byteIdx))
-        pure (.some stateId, .some goals, .some srcBoundaries)
     let nInvocations? := if args.invocations?.isSome then .some step.invocations.length else .none
     return {
       boundary := step.boundary,
       messages := step.messages,
       nInvocations?,
-      goalStateId?,
-      goals?,
-      goalSrcBoundaries?,
       newConstants?,
     }
   return { units }
