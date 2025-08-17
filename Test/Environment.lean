@@ -1,8 +1,9 @@
-import LSpec
 import Pantograph.Delate
 import Pantograph.Environment
+import Repl
 import Test.Common
-import Lean
+
+import LSpec
 
 open Lean
 namespace Pantograph.Test.Environment
@@ -16,15 +17,12 @@ deriving instance DecidableEq, Repr for Protocol.RecursorInfo
 deriving instance DecidableEq, Repr for Protocol.EnvInspectResult
 
 def test_catalog (env : Environment) : IO LSpec.TestSeq := do
-  let inner: CoreM LSpec.TestSeq := do
-    let catalogResult ← Environment.catalog {}
-    let symbolsWithNum := env.constants.fold (init := #[]) (λ acc name info =>
-      match (Environment.toFilteredSymbol name info).isSome && (name matches .num _ _) with
-      | false => acc
-      | true => acc.push name
-      )
-    return LSpec.check "No num symbols" (symbolsWithNum.size == 0)
-  runCoreMSeq env inner
+  let symbolsWithNum := env.constants.fold (init := #[]) (λ acc name info =>
+    match (toFilteredSymbol name info).isSome && (name matches .num _ _) with
+    | false => acc
+    | true => acc.push name
+    )
+  return LSpec.check "No num symbols" (symbolsWithNum.size == 0)
 
 def test_symbol_visibility: IO LSpec.TestSeq := do
   let entries: List (Name × Bool) := [
@@ -32,7 +30,7 @@ def test_symbol_visibility: IO LSpec.TestSeq := do
     ("foo.bla.Init.Data.List.Basic.2.1.Init.Lean.Expr._hyg.4".toName, true),
   ]
   let suite := entries.foldl (λ suites (symbol, target) =>
-    let test := LSpec.check symbol.toString ((Environment.isNameInternal symbol) == target)
+    let test := LSpec.check symbol.toString ((isNameInternal symbol) == target)
     LSpec.TestSeq.append suites test) LSpec.TestSeq.done
   return suite
 
@@ -75,9 +73,10 @@ def test_inspect (env : Environment) : IO LSpec.TestSeq := do
     })
   ]
   let inner: CoreM LSpec.TestSeq := do
+    let coreContext ← readThe Core.Context
     testCases.foldlM (λ acc (name, cat) => do
       let args: Protocol.EnvInspect := { name := name }
-      let result ← match ← Environment.inspect args (options := {}) with
+      let result ← match ← Repl.env_inspect args |>.run { coreContext } |>.run' { env := ← getEnv } with
         | .ok result => pure $ result
         | .error e => panic! s!"Error: {e.desc}"
       let p := match cat with
@@ -90,14 +89,20 @@ def test_inspect (env : Environment) : IO LSpec.TestSeq := do
 
 def test_symbol_location (env : Environment) : TestT IO Unit := do
   addTest $ ← runTestCoreM env do
-    let .ok result ← (Environment.inspect { name := "Nat.le_of_succ_le", source? := .some true } (options := {})).run | fail "Inspect failed"
+    let .ok result ← Repl.env_inspect { name := "Nat.le_of_succ_le", source? := .some true }
+      |>.run { coreContext := ← readThe Core.Context }
+      |>.run' { env := ← getEnv }
+      | fail "Inspect failed"
     checkEq "module" result.module? <| .some "Init.Data.Nat.Basic"
 
     -- Extraction of source doesn't work for symbols in `Init` for some reason
     checkTrue "file" result.sourceUri?.isNone
     checkEq "sourceStart" (result.sourceStart?.map (·.column)) <| .some 0
     checkEq "sourceEnd" (result.sourceEnd?.map (·.column)) <| .some 88
-    let { imports, constNames, .. } ← Environment.moduleRead ⟨"Init.Data.Nat.Basic"⟩
+    let .ok { imports, constNames, .. } ← Repl.env_module_read ⟨"Init.Data.Nat.Basic"⟩
+      |>.run { coreContext := ← readThe Core.Context }
+      |>.run' { env := ← getEnv }
+      | fail "Module read failed"
     checkEq "imports" imports #["Init.SimpLemmas", "Init.Data.NeZero", "Init.Grind.Tactics"]
     checkTrue "constNames" $ constNames.contains "Nat.succ_add"
 

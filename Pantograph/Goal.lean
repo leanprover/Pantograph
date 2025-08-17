@@ -4,6 +4,7 @@ Functions for handling metavariables
 All the functions starting with `try` resume their inner monadic state.
 -/
 import Pantograph.Elab
+import Pantograph.Environment
 import Pantograph.Tactic
 import Lean
 
@@ -231,14 +232,16 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
   let srcNGen := src.coreState.ngen
   let srcNGen' := src'.coreState.ngen
   let dstNGen := dst.coreState.ngen
+  unless src.mctx.depth == src'.mctx.depth && src.mctx.depth == dst.mctx.depth do
+    throwError "Cannot merge goal states with different mctx depths: {src.mctx.depth} -> ({src'.mctx.depth}, {dst.mctx.depth})"
+
   assert! srcNGen.namePrefix == srcNGen'.namePrefix
   assert! srcNGen.namePrefix == dstNGen.namePrefix
-  assert! src.mctx.depth == src'.mctx.depth
-  assert! src.mctx.depth == dst.mctx.depth
-
   let diffNGenIdx := dst.coreState.ngen.idx - srcNGen.idx
 
-  let env ← dst.coreState.env.replayConsts src.env src'.env (skipExisting := true)
+  let constants := envDiff src.env src'.env
+  setEnv dst.env
+  discard $ replayConstantsRenaming (constants.foldl (init := .emptyWithCapacity constants.size) λ acc (k, v) => acc.insert k v)
 
   trace[Pantograph.GoalState.replay] "Merging ngen {srcNGen.idx} -> ({srcNGen'.idx}, {dstNGen.idx})"
   -- True if the name is generated after `src`
@@ -342,7 +345,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
     core := {
       core with
       ngen,
-      env,
+      env := ← getEnv,
       -- Reset the message log when declaration uses `sorry`
       messages := {}
     }

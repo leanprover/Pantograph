@@ -1,4 +1,5 @@
 import Pantograph.Goal
+import Pantograph.Environment
 
 import Lean.Environment
 import Lean.Replay
@@ -46,21 +47,6 @@ unsafe def withUnpickle [Monad m] [MonadLiftT IO m] {α β : Type}
   region.free
   pure r
 
-abbrev ConstArray := Array (Name × ConstantInfo)
-abbrev DistilledEnvironment := Array Import × ConstArray
-
-/-- Boil an environment down to minimal components -/
-def distilEnvironment (env : Environment) (background? : Option Environment := .none)
-  : DistilledEnvironment :=
-  let filter : Name → Bool := match background? with
-    | .some env => (¬ env.contains ·)
-    | .none => λ _ => true
-  let constants : ConstArray := env.constants.map₂.foldl (init := #[]) λ acc name info =>
-    if filter name then
-      acc.push (name, info)
-    else
-      acc
-  (env.header.imports, constants)
 /--
 Pickle an `Environment` to disk.
 
@@ -74,8 +60,6 @@ and then add the new constants.
 def environmentPickle (env : Environment) (path : System.FilePath) (background? : Option Environment := .none)
   : IO Unit :=
   pickle path $ distilEnvironment env background?
-
-deriving instance BEq for Import
 
 def resurrectEnvironment
   (distilled : DistilledEnvironment)

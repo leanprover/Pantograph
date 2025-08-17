@@ -64,7 +64,7 @@ theorem mystery [SizeOf α] (as : List α) (i : Fin as.length) : sizeOf (as.get 
 def checkFileConflicts (env : Environment) (src dst : String) : IO (Except String Environment):= do
   let srcState ← collectOne src
   let dstState ← collectOne dst
-  ExceptT.run $ Environment.checkConflicts env srcState.env dstState.env
+  ExceptT.run $ checkEnvConflicts env srcState.env dstState.env
   where
   collectOne (source : String) : IO _ := do
     let (context, state) ← do createContextStateFromFile source (env? := env)
