@@ -28,13 +28,10 @@
         pkgs,
         ...
       }: let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [(lean4-nix.readToolchainFile ./lean-toolchain)];
-        };
         manifest = pkgs.lib.importJSON ./lake-manifest.json;
         manifest-lspec = builtins.head manifest.packages;
-        lspecLib = pkgs.lean.buildLeanPackage {
+        lean = lean4-nix.packages.${system}.lean;
+        lspecLib = lean.buildLeanPackage {
           name = "LSpec";
           roots = ["LSpec"];
           src = builtins.fetchGit {inherit (manifest-lspec) url rev;};
@@ -77,24 +74,24 @@
             set-test
           ];
         };
-        project = pkgs.lean.buildLeanPackage {
+        project = lean.buildLeanPackage {
           name = "Pantograph";
           roots = ["Pantograph"];
           src = src-project;
         };
-        repl = pkgs.lean.buildLeanPackage {
+        repl = lean.buildLeanPackage {
           name = "Repl";
           roots = ["Main" "Repl"];
           deps = [project];
           src = src-repl;
         };
-        tomograph = pkgs.lean.buildLeanPackage {
+        tomograph = lean.buildLeanPackage {
           name = "tomograph";
           roots = ["Tomograph"];
           deps = [project];
           src = src-tomograph;
         };
-        test = pkgs.lean.buildLeanPackage {
+        test = lean.buildLeanPackage {
           name = "Test";
           # NOTE: The src directory must be ./. since that is where the import
           # root begins (e.g. `import Test.Environment` and not `import
@@ -105,20 +102,18 @@
         };
       in rec {
         packages = {
-          inherit (pkgs.lean) lean lean-all;
-          inherit (project) sharedLib iTree;
+          inherit (project) sharedLib depRoots;
           inherit (repl) executable;
           tomograph = tomograph.executable;
           default = repl.executable;
         };
         legacyPackages = {
           inherit project;
-          leanPkgs = pkgs.lean;
         };
         checks = {
           test =
             pkgs.runCommand "test" {
-              buildInputs = [test.executable pkgs.lean.lean-all];
+              buildInputs = [test.executable lean.lean-all];
             } ''
               #export LEAN_SRC_PATH="${./.}"
               ${test.executable}/bin/test > $out
@@ -126,7 +121,7 @@
         };
         formatter = pkgs.alejandra;
         devShells.default = pkgs.mkShell {
-          buildInputs = [pkgs.lean.lean-all pkgs.lean.lean];
+          buildInputs = [lean.lean-all lean.lean];
         };
       };
     };
