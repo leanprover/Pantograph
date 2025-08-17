@@ -47,21 +47,21 @@ def newGoalState (goalState : GoalState) : MainM Nat := do
   return stateId
 
 def runCoreM { α } (coreM : CoreM α) : EMainM α := do
-  let scope := (← get).scope
-  let options := (← get).options
-  let cancelTk? ← match options.timeout with
+  let { currNamespace, openDecls, opts := options, .. }:= (← get).scope
+  let timeout := (← get).options.timeout
+  let cancelTk? ← match timeout with
     | 0 => pure .none
     | _ => .some <$> IO.CancelToken.new
   let coreCtx : Core.Context := {
     (← read).coreContext with
-    currNamespace      := scope.currNamespace,
-    openDecls          := scope.openDecls,
-    options            := scope.opts,
+    currNamespace,
+    openDecls,
+    options,
     initHeartbeats     :=  ← IO.getNumHeartbeats,
     cancelTk?,
   }
   let coreState : Core.State := {
-    env := (← get).env
+    env := ← getEnv,
   }
   -- Remap the coreM to capture every exception
   let coreM' : CoreM _ :=
@@ -75,10 +75,10 @@ def runCoreM { α } (coreM : CoreM α) : EMainM α := do
         IO.eprintln (← msg.format.toIO)
       resetTraceState
   if let .some token := cancelTk? then
-    runCancelTokenWithTimeout token (timeout := .ofBitVec options.timeout)
+    runCancelTokenWithTimeout token (timeout := .ofBitVec timeout)
   let (result, state') ← match ← (coreM'.run coreCtx coreState).toIO' with
-    | Except.error (Exception.error _ msg)   => Protocol.throw $ { error := "core", desc := ← msg.toString }
-    | Except.error (Exception.internal id _) => Protocol.throw $ { error := "internal", desc := (← id.getName).toString }
+    | Except.error (Exception.error _ msg)   => Protocol.throw { error := "core", desc := ← msg.toString }
+    | Except.error (Exception.internal id _) => Protocol.throw { error := "internal", desc := (← id.getName).toString }
     | Except.ok a                            => pure a
   if (← read).inheritEnv && result matches .ok _ then
     setEnv state'.env
@@ -87,7 +87,7 @@ def runCoreM { α } (coreM : CoreM α) : EMainM α := do
 def runCoreM' { α } (coreM : Protocol.FallibleT CoreM α) : EMainM α := do
   liftExcept $ ← runCoreM coreM.run
 
-def liftMetaM { α } (metaM : MetaM α): EMainM α :=
+def liftMetaM { α } (metaM : MetaM α) : EMainM α :=
   runCoreM metaM.run'
 def liftTermElabM { α } (termElabM : Elab.TermElabM α) (levelNames : List Name := [])
     : EMainM α := do
