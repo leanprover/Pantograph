@@ -1,4 +1,5 @@
 import Pantograph.Goal
+import Pantograph.Environment
 
 import Lean.Environment
 import Lean.Replay
@@ -46,23 +47,8 @@ unsafe def withUnpickle [Monad m] [MonadLiftT IO m] {α β : Type}
   region.free
   pure r
 
-abbrev ConstArray := Array (Name × ConstantInfo)
-abbrev DistilledEnvironment := Array Import × ConstArray
-
-/-- Boil an environment down to minimal components -/
-def distilEnvironment (env : Environment) (background? : Option Environment := .none)
-  : DistilledEnvironment :=
-  let filter : Name → Bool := match background? with
-    | .some env => (¬ env.contains ·)
-    | .none => λ _ => true
-  let constants : ConstArray := env.constants.map₂.foldl (init := #[]) λ acc name info =>
-    if filter name then
-      acc.push (name, info)
-    else
-      acc
-  (env.header.imports, constants)
 /--
-Pickle an `Environment` to disk.
+Pickle an `Environment` to disk relative to a background.
 
 We only store:
 * the list of imports
@@ -75,8 +61,6 @@ def environmentPickle (env : Environment) (path : System.FilePath) (background? 
   : IO Unit :=
   pickle path $ distilEnvironment env background?
 
-deriving instance BEq for Import
-
 def resurrectEnvironment
   (distilled : DistilledEnvironment)
   (background? : Option Environment := .none)
@@ -88,18 +72,21 @@ def resurrectEnvironment
       assert! env.imports == imports
       pure env
   env.replay (Std.HashMap.ofList constArray.toList)
+
 /--
 Unpickle an `Environment` from disk.
 
 We construct a fresh `Environment` with the relevant imports,
 and then replace the new constants.
+
+The `CompactedRegion` must be free'd after using the environment. Otherwise
+there could be memory leaks.
 -/
 @[export pantograph_env_unpickle_m]
 def environmentUnpickle (path : System.FilePath) (background? : Option Environment := .none)
   : IO (Environment × CompactedRegion) := unsafe do
   let (distilled, region) ← unpickle (Array Import × ConstArray) path
   return (← resurrectEnvironment distilled background?, region)
-
 
 /-- `CoreM`'s state, with information irrelevant to pickling masked out -/
 structure CompactCoreState where
@@ -117,11 +104,11 @@ structure CompactGoalState where
 
   core : CompactCoreState
   «meta» : Meta.State
-  «elab»: Elab.Term.State
-  tactic: Elab.Tactic.State
-  root: MVarId
-  parentMVars: List MVarId
-  fragments: FragmentMap
+  «elab» : Elab.Term.State
+  tactic : Elab.Tactic.State
+  root : MVarId
+  parentMVars : List MVarId
+  fragments : FragmentMap
 
 /-- Pickles a goal state by taking its diff relative to a background
 environment. This function eliminates all `MessageData` from synthetic
@@ -157,10 +144,10 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
       | .coe header? expectedType e f? _ => .coe header? expectedType e f? .none
       | k => k
     acc.insert key { val with kind }
-  pickle path ({
+  let compacted : CompactGoalState := {
     env := distilEnvironment env background?,
 
-    core := ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
+    core := { nextMacroScope, ngen, auxDeclNGen },
     «meta»,
     «elab» := { «elab» with syntheticMVars },
     tactic,
@@ -168,8 +155,16 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     root,
     parentMVars,
     fragments,
-  } : CompactGoalState)
+  }
+  pickle path compacted
 
+/--
+Loads a goal state  from disk. The background is the environment which the goal
+state was cached relative to.
+
+The `CompactedRegion` must be free'd after using the goal state. Otherwise there
+will be memory leaks.
+-/
 @[export pantograph_goal_state_unpickle_m]
 def goalStateUnpickle (path : System.FilePath) (background? : Option Environment := .none)
     : IO (GoalState × CompactedRegion) := unsafe do

@@ -4,6 +4,7 @@ Functions for handling metavariables
 All the functions starting with `try` resume their inner monadic state.
 -/
 import Pantograph.Elab
+import Pantograph.Environment
 import Pantograph.Tactic
 import Lean
 
@@ -231,14 +232,18 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
   let srcNGen := src.coreState.ngen
   let srcNGen' := src'.coreState.ngen
   let dstNGen := dst.coreState.ngen
-  assert! srcNGen.namePrefix == srcNGen'.namePrefix
-  assert! srcNGen.namePrefix == dstNGen.namePrefix
-  assert! src.mctx.depth == src'.mctx.depth
-  assert! src.mctx.depth == dst.mctx.depth
+  unless src.mctx.depth == src'.mctx.depth && src.mctx.depth == dst.mctx.depth do
+    throwError "Cannot merge goal states with different mctx depths: {src.mctx.depth} -> ({src'.mctx.depth}, {dst.mctx.depth})"
+  unless srcNGen.namePrefix == srcNGen'.namePrefix && srcNGen.namePrefix == dstNGen.namePrefix do
+    throwError "Divergence name generator prefixes: {srcNGen.namePrefix} -> ({srcNGen'.namePrefix}, {dstNGen.namePrefix})"
 
   let diffNGenIdx := dst.coreState.ngen.idx - srcNGen.idx
 
-  let env ← dst.coreState.env.replayConsts src.env src'.env (skipExisting := true)
+  let constants := envDiff src.env src'.env
+
+  dst.restoreCoreMExtra
+  setEnv dst.env
+  let nameMap ← replayConstantsRenaming (constants.foldl (init := .emptyWithCapacity constants.size) λ acc (k, v) => acc.insert k v)
 
   trace[Pantograph.GoalState.replay] "Merging ngen {srcNGen.idx} -> ({srcNGen'.idx}, {dstNGen.idx})"
   -- True if the name is generated after `src`
@@ -262,6 +267,10 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
     | .mvar { name } => .mvar ⟨mapId name⟩
     | l => l
   let mapExpr (e : Expr) : CoreM Expr := Core.transform e λ
+    | .const n levels =>
+      let levels' := levels.map mapLevel
+      let n' := nameMap.findD n n
+      pure $ .done $ .const n' levels'
     | .sort level => pure $ .done $ .sort (mapLevel level)
     | .mvar { name } => pure $ .done $ .mvar ⟨mapId name⟩
     | _ => pure .continue
@@ -340,19 +349,17 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
   let savedMeta := {
     savedMeta with
     core := {
-      core with
+      ← Core.saveState with
       ngen,
-      env,
       -- Reset the message log when declaration uses `sorry`
       messages := {}
-    }
+    },
     «meta» := {
       «meta» with
       mctx,
-    }
+    },
   }
   let m : MetaM Meta.SavedState := Meta.withMCtx mctx do
-    restoreCoreMExtra savedMeta.core
     savedMeta.restore
 
     for (lmvarId, l') in src'.mctx.lAssignment do

@@ -97,6 +97,164 @@ def liftTermElabM { α } (termElabM : Elab.TermElabM α) (levelNames : List Name
   }
   runCoreM $ termElabM.run' context state |>.run'
 
+section Environment
+
+def env_catalog (_: Protocol.EnvCatalog): EMainM Protocol.EnvCatalogResult := runCoreM do
+  let env ← MonadEnv.getEnv
+  let names := env.constants.fold (init := #[]) λ acc name info =>
+    match toFilteredSymbol name info with
+    | .some x => acc.push x
+    | .none => acc
+  return { symbols := names }
+def env_inspect (args: Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
+  let env ← MonadEnv.getEnv
+  let options := (← getMainState).options
+  let name :=  args.name.toName
+  let info? := env.find? name
+  let .some info := info?
+    | throw $ Protocol.errorIndex s!"Symbol not found {args.name}"
+  runCoreM do
+  let module? := env.getModuleIdxFor? name >>=
+    (λ idx => env.allImportedModuleNames[idx.toNat]?)
+  let value? := match args.value?, info with
+    | .some true, _ => info.value?
+    | .some false, _ => .none
+    | .none, .defnInfo _ => info.value?
+    | .none, _ => .none
+  let type ← unfoldAuxLemmas info.type
+  let value? ← value?.mapM (λ v => unfoldAuxLemmas v)
+  -- Information common to all symbols
+  let core := {
+    type := ← (serializeExpression options type).run',
+    isUnsafe := info.isUnsafe,
+    value? := ← value?.mapM (λ v => serializeExpression options v |>.run'),
+    publicName? := Lean.privateToUserName? name |>.map (·.toString),
+    typeDependency? := if args.dependency?.getD false
+      then .some <| type.getUsedConstants.map (λ n => serializeName n)
+      else .none,
+    valueDependency? := if args.dependency?.getD false
+      then value?.map (λ e =>
+        e.getUsedConstants.filter (!isNameInternal ·) |>.map (λ n => serializeName n) )
+      else .none,
+    module? := module?.map (·.toString)
+  }
+  let result ← match info with
+    | .inductInfo induct => pure { core with inductInfo? := .some {
+          numParams := induct.numParams,
+          numIndices := induct.numIndices,
+          all := induct.all.toArray.map (·.toString),
+          ctors := induct.ctors.toArray.map (·.toString),
+          isRec := induct.isRec,
+          isReflexive := induct.isReflexive,
+          isNested := induct.isNested,
+      } }
+    | .ctorInfo ctor => pure { core with constructorInfo? := .some {
+          induct := ctor.induct.toString,
+          cidx := ctor.cidx,
+          numParams := ctor.numParams,
+          numFields := ctor.numFields,
+      } }
+    | .recInfo r => pure { core with recursorInfo? := .some {
+          all := r.all.toArray.map (·.toString),
+          numParams := r.numParams,
+          numIndices := r.numIndices,
+          numMotives := r.numMotives,
+          numMinors := r.numMinors,
+          rules := ← r.rules.toArray.mapM (λ rule => do
+              pure {
+                ctor := rule.ctor.toString,
+                nFields := rule.nfields,
+                rhs := ← (serializeExpression options rule.rhs).run',
+              })
+          k := r.k,
+      } }
+    | _ => pure core
+  let result ← if args.source?.getD false then
+      try
+        let sourceUri? ← module?.bindM (Server.documentUriFromModule? ·)
+        let declRange? ← findDeclarationRanges? name
+        let sourceStart? := declRange?.map (·.range.pos)
+        let sourceEnd? := declRange?.map (·.range.endPos)
+        .pure {
+          result with
+          sourceUri? := sourceUri?.map (toString ·),
+          sourceStart?,
+          sourceEnd?,
+        }
+      catch _e =>
+        .pure result
+    else
+      .pure result
+  return result
+def env_describe (_: Protocol.EnvDescribe): EMainM Protocol.EnvDescribeResult := runCoreM do
+  let env ← Lean.MonadEnv.getEnv
+  return {
+    imports := env.header.imports.map toString,
+    modules := env.header.moduleNames.map (·.toString),
+  }
+def env_module_read (args: Protocol.EnvModuleRead): EMainM Protocol.EnvModuleReadResult := runCoreM do
+  let env ← Lean.MonadEnv.getEnv
+  let .some i := env.header.moduleNames.findIdx? (· == args.module.toName) |
+    throwError s!"Module not found {args.module}"
+  let data := env.header.moduleData[i]!
+  return {
+    imports := data.imports.map toString,
+    constNames := data.constNames.map (·.toString),
+    extraConstNames := data.extraConstNames.map (·.toString),
+  }
+/-- Elaborates and adds a declaration to the `CoreM` environment. -/
+def env_add (args : Protocol.EnvAdd) : EMainM Protocol.EnvAddResult := withInheritEnv <| runCoreM' do
+  let { name, levels?, type?, value, isTheorem } := args
+  let levels := levels?.getD #[]
+  let env ← Lean.MonadEnv.getEnv
+  let levelParams := levels.toList.map (·.toName)
+  let tvM: Elab.TermElabM (Except String (Expr × Expr)) :=
+    Elab.Term.withLevelNames levelParams do do
+    let expectedType?? : Except String (Option Expr) ← ExceptT.run $ type?.mapM λ type => do
+      match parseTerm env type with
+      | .ok syn => elabTerm syn
+      | .error e => MonadExceptOf.throw e
+    let expectedType? ← match expectedType?? with
+      | .ok t? => pure t?
+      | .error e => return .error e
+    let value ← match parseTerm env value with
+      | .ok syn => do
+        try
+          let expr ← Elab.Term.elabTerm (stx := syn) (expectedType? := expectedType?)
+          Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+          let expr ← instantiateMVars expr
+          pure $ expr
+        catch ex => return .error (← ex.toMessageData.toString)
+      | .error e => return .error e
+    Elab.Term.synthesizeSyntheticMVarsNoPostponing
+    let type ← match expectedType? with
+      | .some t => pure t
+      | .none => Meta.inferType value
+    pure $ .ok (← instantiateMVars type, ← instantiateMVars value)
+  let (type, value) ← match ← tvM.run' (ctx := {}) |>.run' with
+    | .ok t => pure t
+    | .error e => Protocol.throw $ Protocol.errorExpr e
+  let decl := if isTheorem then
+    Lean.Declaration.thmDecl <| Lean.mkTheoremValEx
+      (name := name.toName)
+      (levelParams := levelParams)
+      (type := type)
+      (value := value)
+      (all := [])
+  else
+    Lean.Declaration.defnDecl <| Lean.mkDefinitionValEx
+      (name := name.toName)
+      (levelParams := levelParams)
+      (type := type)
+      (value := value)
+      (hints := Lean.mkReducibilityHintsRegularEx 1)
+      (safety := Lean.DefinitionSafety.safe)
+      (all := [])
+  Lean.addDecl decl
+  return {}
+
+end Environment
+
 section Goal
 
 def goal_tactic (args: Protocol.GoalTactic): EMainM Protocol.GoalTacticResult := do
@@ -338,19 +496,6 @@ def execute (command: Protocol.Command): MainM Json := do
     return {  }
   options_print (_: Protocol.OptionsPrint): EMainM Protocol.Options := do
     return (← getMainState).options
-  env_describe (args: Protocol.EnvDescribe): EMainM Protocol.EnvDescribeResult := do
-    let result ← runCoreM $ Environment.describe args
-    return result
-  env_module_read (args: Protocol.EnvModuleRead): EMainM Protocol.EnvModuleReadResult := do
-    runCoreM $ Environment.moduleRead args
-  env_catalog (args: Protocol.EnvCatalog): EMainM Protocol.EnvCatalogResult := do
-    let result ← runCoreM $ Environment.catalog args
-    return result
-  env_inspect (args: Protocol.EnvInspect): EMainM Protocol.EnvInspectResult := do
-    let state ← getMainState
-    runCoreM' $ Environment.inspect args state.options
-  env_add (args: Protocol.EnvAdd): EMainM Protocol.EnvAddResult := withInheritEnv do
-    runCoreM' $ Environment.addDecl args.name (args.levels?.getD #[]) args.type? args.value args.isTheorem
   env_save (args: Protocol.EnvSaveLoad): EMainM Protocol.EnvSaveLoadResult := do
     let env ← MonadEnv.getEnv
     environmentPickle env args.path
@@ -447,7 +592,7 @@ def execute (command: Protocol.Command): MainM Json := do
     if srcMessages.any (·.severity ==.error) ∨ dstMessages.any (·.severity ==.error) then
       return { srcMessages, dstMessages }
     let result? ← show IO _ from ExceptT.run do
-      Environment.checkConflicts env srcState.env dstState.env
+      checkEnvConflicts env srcState.env dstState.env
     match result? with
     | .error e => return { failure? := .some e }
     | .ok _ => return {}

@@ -328,15 +328,15 @@ def test_replay_environment : TestM Unit := do
   let .success state2 _  ← state.tryTacticM goal (Tactic.assignWithAuxLemma type) | fail "right"
   checkEq "(state1 goals)" state1.goals.length 0
   checkEq "(state2 goals)" state2.goals.length 0
-  /-
+
   let stateT ← state2.replay state state1
   checkEq "(stateT goals)" stateT.goals.length 0
   let .some root := stateT.rootExpr? | fail "Root expression must exist"
+  Meta.check root
   checkTrue "root has aux lemma" $ root.getUsedConstants.any isAuxLemma
-  checkEq "(root)" (toString $ ← Meta.ppExpr root) "⟨_proof_1, _proof_2⟩"
+  checkEq "(root)" (toString $ ← Meta.ppExpr root) "⟨_proof_2, _proof_1⟩"
   let root ← unfoldAuxLemmas root
   checkEq "(root unfold)" (toString $ ← Meta.ppExpr root) "⟨sorry, sorry⟩"
-  -/
 
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [

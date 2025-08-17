@@ -1,7 +1,8 @@
+import Pantograph.Library
+import Pantograph.Serial
+
 import LSpec
 import Test.Common
-import Lean
-import Pantograph.Library
 
 open Lean
 
