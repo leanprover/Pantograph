@@ -26,6 +26,10 @@ abbrev MainM := ReaderT Context $ StateRefT State IO
 abbrev EMainM := Protocol.FallibleT $ ReaderT Context $ StateRefT State IO
 def getMainState : MainM State := get
 
+instance : MonadBacktrack State MainM where
+  saveState := getMainState
+  restoreState := set
+
 instance : MonadEnv MainM where
   getEnv := return (← get).env
   modifyEnv f := modify fun s => { s with env := f s.env  }
@@ -419,18 +423,19 @@ def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendP
 end Frontend
 
 /-- Main loop command of the REPL -/
-def execute (command: Protocol.Command): MainM Json := do
-  let run { α β: Type } [FromJson α] [ToJson β] (comm: α → EMainM β): MainM Json :=
-    try
-      match fromJson? command.payload with
-      | .ok args => do
-        let (msg, result) ← IO.FS.withIsolatedStreams (isolateStderr := false) $ comm args
-        if !msg.isEmpty then
-          IO.eprint s!"stdout: {msg}"
-        match result with
-        | .ok result =>  return toJson result
-        | .error ierror => return toJson ierror
+def execute (command : Protocol.Command) : MainM Json := do
+  let run { α β } [FromJson α] [ToJson β] (comm : α → EMainM β) : MainM Json := do
+    let args ← match fromJson? command.payload with
+      | .ok args => pure args
       | .error error => return toJson $ errorCommand s!"Unable to parse json: {error}"
+    try
+      let (out, result) ← IO.FS.withIsolatedStreams (isolateStderr := false) do
+        commitIfNoEx $ comm args
+      if !out.isEmpty then
+        IO.eprint s!"stdout: {out}"
+      match result with
+      | .ok result =>  return toJson result
+      | .error ierror => return toJson ierror
     catch ex : IO.Error =>
       let error : Protocol.InteractionError := { error := "io", desc := ex.toString }
       return toJson error
