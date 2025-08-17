@@ -102,8 +102,7 @@
         };
       in rec {
         packages = {
-          inherit lean;
-          inherit (project) sharedLib iTree;
+          inherit (project) sharedLib depRoots;
           inherit (repl) executable;
           tomograph = tomograph.executable;
           default = repl.executable;
