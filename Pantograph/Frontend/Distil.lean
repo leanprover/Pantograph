@@ -267,6 +267,9 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
               Meta.mkLambdaFVars #[binder] v
             let (companionValue', companionGoals) ← Tactic.sorryToHole
               (companionValue.beta #[witnessValue']) |>.run []
+            if h : witnessGoals.length = 1 then
+              let witnessGoal := witnessGoals[0]
+              witnessGoal.setTag binderName
             let value ← Meta.mkAppOptM ``Subtype.mk #[
               witness, companion,
               witnessValue',
