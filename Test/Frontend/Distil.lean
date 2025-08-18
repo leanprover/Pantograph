@@ -449,14 +449,15 @@ theorem mystery2 : f 2 = 4 := sorry
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[
       {
+        userName? := .some "f",
         vars := #[{ userName := "x", type? := .some { pp? := .some "Nat" } }]
         target := { pp? := .some "Nat" },
       },
       {
-        target := { pp? := .some "(fun x => x + ?m.7) 1 = 2" },
+        target := { pp? := .some "(fun x => x + ?f) 1 = 2" },
       },
       {
-        target := { pp? := .some "(fun x => x + ?m.7) 2 = 4" },
+        target := { pp? := .some "(fun x => x + ?f) 2 = 4" },
       },
     ]
   checkFalse "root" state.isSolved
