@@ -22,4 +22,18 @@ You can run an individual test by specifying a prefix
 lake test -- Frontend/Collect
 ```
 
+## Formatting
+
+When writing Lean code, follow the guidelines
+
+- Functions should be in `camelCase`
+- Theorems and tests should be in `snake_case`
+- Write the `|` in a pattern-matching `let` on the next line. This is for visual
+  distinction with long function arguments.
+```lean
+let .some result := function
+  | fail "incorrect"
+```
+- Each test should be pinpointed and devolatilized.
+
 

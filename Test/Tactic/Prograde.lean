@@ -1,9 +1,7 @@
-import LSpec
-import Lean
+import Pantograph.Tactic.Prograde
 import Test.Common
 
 open Lean
-open Pantograph
 
 namespace Pantograph.Test.Tactic.Prograde
 

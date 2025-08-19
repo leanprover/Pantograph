@@ -5,14 +5,12 @@ import Pantograph.Goal
 import Pantograph.Environment
 import Pantograph.Protocol
 
-import Lean
+import Lean.Compiler.IR.EmitLLVM
 import Std.Data.HashMap
 
-open Lean
-
--- Symbol processing functions --
-
 namespace Pantograph
+
+open Lean
 
 inductive Projection where
   -- Normal field case
@@ -411,7 +409,7 @@ partial def serializeExpressionSexp (expr: Expr) : MetaM String := do
       -- is wrapped in a :lit sexp.
       let v' := match v with
         | .natVal val => toString val
-        | .strVal val => IR.EmitC.quoteString val
+        | .strVal val => IR.EmitLLVM.quoteString val
       pure s!"(:lit {v'})"
     | .mdata _ inner =>
       -- NOTE: Equivalent to expr itself, but mdata influences the prettyprinter

@@ -65,9 +65,13 @@ def main (args: List String): IO Unit := do
   -- Separate imports and options
   let (options, imports) := args.partition (·.startsWith "--")
   let coreContext ← options.map (·.drop 2) |>.toArray |> Pantograph.createCoreContext
-  let coreState ← Pantograph.createCoreState imports.toArray
+  let env ← Lean.importModules
+    (imports := imports.toArray.map ({ module := ·.toName }))
+    (opts := {})
+    (trustLevel := 1)
+    (loadExts := true)
   try
-    let mainM := loop.run { coreContext } |>.run' { env := coreState.env }
+    let mainM := loop.run { coreContext } |>.run' { env }
     printImmediate "ready."
     mainM
   catch ex =>

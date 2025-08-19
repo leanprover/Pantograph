@@ -1,11 +1,9 @@
-import LSpec
 import Pantograph.Goal
 import Pantograph.Delate
 import Test.Common
-import Lean
 
 namespace Pantograph.Test.Metavar
-open Pantograph
+
 open Lean
 
 abbrev TestM := TestT $ ReaderT Protocol.Options Elab.TermElabM

@@ -1,12 +1,9 @@
-import LSpec
-import Lean
 import Pantograph.Library
 import Test.Common
 
-open Lean
-open Pantograph
-
 namespace Pantograph.Test.Library
+
+open Lean
 
 def runTermElabM { α } (termElabM: Elab.TermElabM α): CoreM α :=
   termElabM.run' (ctx := defaultElabContext) |>.run'

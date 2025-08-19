@@ -1,4 +1,5 @@
-import Lean
+import Lean.Elab
+import Lean.Meta
 
 open Lean
 
