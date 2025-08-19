@@ -103,14 +103,14 @@ def liftTermElabM { α } (termElabM : Elab.TermElabM α) (levelNames : List Name
 
 section Environment
 
-def env_catalog (_: Protocol.EnvCatalog): EMainM Protocol.EnvCatalogResult := runCoreM do
+def env_catalog (_ : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
   let env ← MonadEnv.getEnv
   let names := env.constants.fold (init := #[]) λ acc name info =>
     match toFilteredSymbol name info with
     | .some x => acc.push x
     | .none => acc
   return { symbols := names }
-def env_inspect (args: Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
+def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
   let env ← MonadEnv.getEnv
   let options := (← getMainState).options
   let name :=  args.name.toName
@@ -137,8 +137,8 @@ def env_inspect (args: Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult :
       then .some <| type.getUsedConstants.map (λ n => serializeName n)
       else .none,
     valueDependency? := if args.dependency?.getD false
-      then value?.map (λ e =>
-        e.getUsedConstants.filter (!isNameInternal ·) |>.map (λ n => serializeName n) )
+      then value?.map λ e =>
+        e.getUsedConstants.filter (!isNameInternal ·) |>.map (λ n => serializeName n)
       else .none,
     module? := module?.map (·.toString)
   }
@@ -190,13 +190,13 @@ def env_inspect (args: Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult :
     else
       .pure result
   return result
-def env_describe (_: Protocol.EnvDescribe): EMainM Protocol.EnvDescribeResult := runCoreM do
+def env_describe (_ : Protocol.EnvDescribe) : EMainM Protocol.EnvDescribeResult := runCoreM do
   let env ← Lean.MonadEnv.getEnv
   return {
     imports := env.header.imports.map toString,
     modules := env.header.moduleNames.map (·.toString),
   }
-def env_module_read (args: Protocol.EnvModuleRead): EMainM Protocol.EnvModuleReadResult := runCoreM do
+def env_module_read (args : Protocol.EnvModuleRead) : EMainM Protocol.EnvModuleReadResult := runCoreM do
   let env ← Lean.MonadEnv.getEnv
   let .some i := env.header.moduleNames.findIdx? (· == args.module.toName) |
     throwError s!"Module not found {args.module}"
@@ -261,10 +261,10 @@ end Environment
 
 section Goal
 
-def goal_tactic (args: Protocol.GoalTactic): EMainM Protocol.GoalTacticResult := do
+def goal_tactic (args : Protocol.GoalTactic) : EMainM Protocol.GoalTacticResult := do
   let state ← getMainState
-  let .some goalState := state.goalStates[args.stateId]? |
-    Protocol.throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
+  let .some goalState := state.goalStates[args.stateId]?
+    | throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
   let unshielded := args.autoResume?.getD state.options.automaticMode
   let site ← match args.goalId?, unshielded with
     | .some goalId, true => do
@@ -282,7 +282,7 @@ def goal_tactic (args: Protocol.GoalTactic): EMainM Protocol.GoalTacticResult :=
       pure (.focus goal)
   let nextGoalState?: Except _ TacticResult ← liftTermElabM do
     -- NOTE: Should probably use a macro to handle this...
-    match args.tactic?, args.mode?, args.expr?, args.have?, args.let?, args.draft?  with
+    match args.tactic?, args.mode?, args.expr?, args.have?, args.let?, args.draft? with
     | .some tactic, .none, .none, .none, .none, .none => do
       pure $ Except.ok $ ← goalState.tryTactic site tactic
     | .none, .some mode, .none, .none, .none, .none => match mode with
@@ -339,7 +339,7 @@ end Goal
 
 section Frontend
 
-def frontend_distil (args: Protocol.FrontendDistil): EMainM Protocol.FrontendDistilResult := do
+def frontend_distil (args : Protocol.FrontendDistil) : EMainM Protocol.FrontendDistilResult := do
   let config := {
     binderName? := args.binderName?.map (·.toName),
     ignoreValues := args.ignoreValues,
@@ -361,7 +361,7 @@ structure CompilationUnit where
 
 export Frontend (defaultFileName)
 
-def frontend_process (args: Protocol.FrontendProcess): EMainM Protocol.FrontendProcessResult := do
+def frontend_process (args : Protocol.FrontendProcess) : EMainM Protocol.FrontendProcessResult := do
   let (fileName, file) ← match args.fileName?, args.file? with
     | .some fileName, .none => do
       let file ← IO.FS.readFile fileName
@@ -614,5 +614,3 @@ def execute (command : Protocol.Command) : MainM Json := do
     catch ex : IO.Error =>
       let error : Protocol.InteractionError := { error := "frontend", desc := ex.toString }
       throw error
-
-end Pantograph.Repl

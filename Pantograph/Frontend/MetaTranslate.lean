@@ -1,9 +1,9 @@
 import Lean.Meta
 import Std.Data.HashMap
 
-open Lean
-
 namespace Pantograph.Frontend
+
+open Lean
 
 namespace MetaTranslate
 
@@ -159,12 +159,10 @@ def translateMVarFromTermInfo (termInfo : Elab.TermInfo) (context? : Option Elab
       Meta.mkFreshExprSyntheticOpaqueMVar type'
     return mvar.mvarId!
 
-
 def translateMVarFromTacticInfoBefore (tacticInfo : Elab.TacticInfo) (_context? : Option Elab.ContextInfo)
     : MetaTranslateM (List MVarId) := do
   withTheReader Context (λ ctx => { ctx with sourceMCtx := tacticInfo.mctxBefore }) do
     tacticInfo.goalsBefore.mapM translateMVarId
-
 
 end MetaTranslate
 
@@ -172,5 +170,3 @@ export MetaTranslate (MetaTranslateM)
 
 initialize
   registerTraceClass `Pantograph.Frontend.MetaTranslate
-
-end Pantograph.Frontend

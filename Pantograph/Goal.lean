@@ -6,7 +6,6 @@ All the functions starting with `try` resume their inner monadic state.
 import Pantograph.Elab
 import Pantograph.Environment
 import Pantograph.Tactic
-import Lean
 
 namespace Pantograph
 open Lean

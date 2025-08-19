@@ -26,7 +26,6 @@ protected def drop [Inhabited α] (t : PersistentArray α) (n : Nat) : List α :
 
 end Lean.PersistentArray
 
-
 namespace Pantograph.Frontend
 
 @[export pantograph_frontend_stx_byte_range]
@@ -129,7 +128,7 @@ def processOneCommand: FrontendM (CompilationStep × Bool) := do
 
 /-- Executes a `FrontendM`-based monad until completion -/
 partial def executeFrontend { m } [Monad m] [MonadLiftT FrontendM m]
-  (f: CompilationStep → m Unit) : m Unit := do
+  (f : CompilationStep → m Unit) : m Unit := do
   let (cmd, done) ← processOneCommand
   if done then
     if cmd.src.isEmpty then
@@ -142,7 +141,7 @@ partial def executeFrontend { m } [Monad m] [MonadLiftT FrontendM m]
 
 def mapCompilationSteps { m α }
   [Monad m] [MonadLiftT FrontendM m] [MonadLiftT (ST IO.RealWorld) m]
-  (f: CompilationStep → m α) : m (List α) := do
+  (f : CompilationStep → m α) : m (List α) := do
   let f' (step : CompilationStep) : StateRefT' IO.RealWorld (List α) m Unit := do
     let a ← f step
     modify (a :: ·)
@@ -195,5 +194,3 @@ def collectEndState : FrontendM Elab.Command.State := do
   executeFrontend λ _ => pure ()
   let state ← get
   return state.commandState
-
-end Pantograph.Frontend

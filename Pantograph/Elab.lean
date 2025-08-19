@@ -1,7 +1,9 @@
-import Lean
-open Lean
+import Lean.Elab
+import Lean.Parser
 
 namespace Pantograph
+
+open Lean
 
 -- Functions for creating contexts and states
 @[export pantograph_default_elab_context]
@@ -56,5 +58,3 @@ def runParser (env : Environment) (parser : Parser) (input : String) (fileName :
     Except.ok (s.stxStack.back, s.pos)
   else
     Except.error (s.toErrorMsg ictx)
-
-end Pantograph

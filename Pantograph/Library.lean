@@ -3,9 +3,9 @@ import Pantograph.Goal
 import Pantograph.Protocol
 import Pantograph.Delate
 
-import Lean
+namespace Pantograph
 
-namespace Lean
+open Lean
 
 /-- This is better than the default version since it handles `.` and doesn't
  crash the program when it fails. -/
@@ -32,12 +32,6 @@ def setOptionFromString' (opts : Options) (entry : String) : ExceptT String IO O
     | some v => pure $ opts.setInt key v
   | DataValue.ofSyntax _ => throw s!"invalid Syntax option value"
 
-end Lean
-
-open Lean
-
-namespace Pantograph
-
 def runMetaM { α } (metaM: MetaM α): CoreM α :=
   metaM.run'
 
@@ -51,13 +45,13 @@ unsafe def initSearch (sp: String): IO Unit := do
 
 /-- Creates a Core.Context object needed to run all monads -/
 @[export pantograph_create_core_context]
-def createCoreContext (options: Array String): IO Core.Context := do
+def createCoreContext (options : Array String) : IO Core.Context := do
   let options? ← options.foldlM setOptionFromString' Options.empty |>.run
   let options ← match options? with
     | .ok options => pure options
     | .error e => throw $ IO.userError s!"Options cannot be parsed: {e}"
   return {
-    currNamespace := Name.str .anonymous "Cirno"
+    currNamespace := `Cirno,
     openDecls := [],     -- No 'open' directives needed
     fileName := "<Pantograph>",
     fileMap := { source := "", positions := #[0] },
@@ -66,16 +60,11 @@ def createCoreContext (options: Array String): IO Core.Context := do
 
 /-- Creates a Core.State object needed to run all monads -/
 @[export pantograph_create_core_state]
-def createCoreState (imports: Array String): IO Core.State := do
-  let env ← Lean.importModules
-    (imports := imports.map (λ str => { module := str.toName }))
-    (opts := {})
-    (trustLevel := 1)
-    (loadExts := true)
-  return { env := env }
+def createCoreState (env : Environment) : IO Core.State := do
+  return { env }
 
 @[export pantograph_parse_elab_type_m]
-def parseElabType (type: String): Protocol.FallibleT Elab.TermElabM Expr := do
+def parseElabType (type : String) : Protocol.FallibleT Elab.TermElabM Expr := do
   let env ← MonadEnv.getEnv
   let syn ← match parseTerm env type with
     | .error str => Protocol.throw $ errorI "parse" str
@@ -86,7 +75,7 @@ def parseElabType (type: String): Protocol.FallibleT Elab.TermElabM Expr := do
 
 /-- This must be a TermElabM since the parsed expr contains extra information -/
 @[export pantograph_parse_elab_expr_m]
-def parseElabExpr (expr: String) (expectedType?: Option String := .none): Protocol.FallibleT Elab.TermElabM Expr := do
+def parseElabExpr (expr : String) (expectedType? : Option String := .none) : Protocol.FallibleT Elab.TermElabM Expr := do
   let env ← MonadEnv.getEnv
   let expectedType? ← expectedType?.mapM parseElabType
   let syn ← match parseTerm env expr with
@@ -192,5 +181,3 @@ def spawnCancelToken (timeout : UInt32) : IO IO.CancelToken := do
   let token ← IO.CancelToken.new
   runCancelTokenWithTimeout token timeout
   return token
-
-end Pantograph

@@ -1,9 +1,10 @@
 /- Prograde (forward) reasoning tactics -/
-
-import Lean
-open Lean
+import Lean.Meta
+import Lean.Elab.Tactic
 
 namespace Pantograph.Tactic
+
+open Lean
 
 private def mkUpstreamMVar (goal: MVarId) : MetaM Expr := do
   Meta.mkFreshExprSyntheticOpaqueMVar (← goal.getType) (tag := ← goal.getTag)
@@ -84,5 +85,3 @@ def evalLet (binderName: Name) (type: Syntax): Elab.Tactic.TacticM Unit := do
   let type ← goal.withContext $ Elab.Term.elabType (stx := type)
   let result ← «let» goal binderName type
   Elab.Tactic.replaceMainGoal [result.branch, result.main]
-
-end Pantograph.Tactic

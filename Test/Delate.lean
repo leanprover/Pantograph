@@ -1,7 +1,5 @@
-import LSpec
 import Pantograph.Delate
 import Test.Common
-import Lean
 
 open Lean Pantograph
 
