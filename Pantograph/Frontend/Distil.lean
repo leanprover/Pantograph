@@ -281,5 +281,3 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
   }
   m.run { inContext := fContext.inputCtx }
     |>.run' { outContext, outState, commands }
-
-end Pantograph.Frontend
