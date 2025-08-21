@@ -532,6 +532,8 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
 
   let .some map ← iter | return .none
   if srcFVarIds.length = srcLCtx.size then
+    -- Use delayed assignments to avoid duplication. In this case we can
+    -- directly map between the src and dst free variables.
     let li := srcFVarIds.toArray.map λ fvarId => .fvar (map.get! fvarId)
     assignDelayedMVar goal li src
   else
@@ -542,10 +544,15 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
     let flag ← goal.checkedAssign solution'
 
   return .subsumed
+
 protected def GoalState.subsume (state : GoalState) (goal : MVarId) (hist : Array MVarId)
   : MetaM Subsumption := do
   state.restoreMetaM
+  if (← goal.findDecl?).isNone then
+    throwError "Nonexistent metavariable: {goal.name}"
   for mvarId in hist do
+    if (← mvarId.findDecl?).isNone then
+      throwError "Nonexistent historical metavariable: {mvarId.name}"
     let r ← canSubsume? goal mvarId
     if r matches .none then
       continue
