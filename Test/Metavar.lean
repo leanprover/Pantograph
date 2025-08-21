@@ -348,7 +348,7 @@ def test_subsume_fail : TestM Unit := do
     goal.assign solution
     return goal
   let subsumeFlag ← canSubsume? goalDst goalSrc
-  checkFalse "¬ subsume" subsumeFlag
+  checkEq "¬ subsume" subsumeFlag .none
   checkFalse "¬ assigned" $ ← goalDst.isAssignedOrDelayedAssigned
 
 def test_subsume_extra_fvar : TestM Unit := do
@@ -359,20 +359,22 @@ def test_subsume_extra_fvar : TestM Unit := do
   let goalSrc ← Meta.forallTelescope st λ fvars target => do
     checkEq "fvars" fvars.size 3
     let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
-    let solution ← Elab.Term.elabTerm (← `(term|Or.inl h)) target
+    let solution ← instantiateMVars $ ← Elab.Term.elabTerm (← `(term|Or.inl h)) target
     goal.assign solution
+    checkFalse "solution mvar" solution.hasExprMVar
     return goal
   let subsumeFlag ← canSubsume? goalDst goalSrc
-  checkTrue "subsume" subsumeFlag
-  let expr ← instantiateMVars (.mvar goalDst)
-  Meta.check expr
-  checkFalse "assigned" expr.hasExprMVar
+  checkEq "subsume" subsumeFlag .subsumed
+  goalDst.withContext do
+    let expr ← instantiateMVars (.mvar goalDst)
+    Meta.check expr
+    checkFalse "assigned" expr.hasExprMVar
 
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("Instantiate", test_instantiate_mvar),
-    ("2 < 5", test_m_couple),
-    ("2 < 5", test_m_couple_simp),
+    ("2 < 5 coupled", test_m_couple),
+    ("2 < 5 simp", test_m_couple_simp),
     ("Proposition Generation", test_proposition_generation),
     ("Partial Continuation", test_partial_continuation),
     ("Branch Unification", test_branch_unification),

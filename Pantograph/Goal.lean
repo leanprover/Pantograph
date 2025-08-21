@@ -417,7 +417,10 @@ inductive Subsumption where
   /-- No subsumption possible -/
   | none
   /-- Goal solved by an earlier solved goal -/
-  | subsumed (src : MVarId)
+  | subsumed
+  /-- Generated a cycle -/
+  | cycle
+  deriving DecidableEq, BEq, Repr
 
 private def mapFVars (expr : Expr) (map : Std.HashMap FVarId FVarId)
   : CoreM (Option Expr) := OptionT.run $ Core.transform expr λ
@@ -428,13 +431,15 @@ private def mapFVars (expr : Expr) (map : Std.HashMap FVarId FVarId)
     | e =>
       return .continue e
 
-def canSubsume? (goal src : MVarId) : MetaM Bool := do
+def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
   -- Find necessary `FVarIds`
   let dstFVarIds := List.reverse <|
     (← goal.getDecl).lctx.foldl (init := []) λ acc decl => decl.fvarId :: acc
   let solution ← src.withContext do
     instantiateMVars (.mvar src)
-  -- FIXME: Check cycles before assigning!
+  -- This shows a cycle
+  unless ← occursCheck goal solution do
+    return .cycle
 
   let srcLCtx := (← src.getDecl).lctx
   let srcFVarIds := List.reverse $ srcLCtx.foldl (init := []) λ acc decl =>
@@ -446,7 +451,7 @@ def canSubsume? (goal src : MVarId) : MetaM Bool := do
   let n := dstFVarIds.length
   if hnm' : n < m then
     -- The context is smaller, so it is not possible
-    return false
+    return .none
   else
   have : n ≥ m := Nat.le_of_not_lt hnm'
   let rec iter (iDst iSrc iOffset : Nat := 0)
@@ -525,18 +530,26 @@ def canSubsume? (goal src : MVarId) : MetaM Bool := do
       iter iDst' iSrc map
   -/
 
-  let .some map ← iter | return false
-  -- Constructs the subsuming expression
-  let li := srcFVarIds.toArray.map λ fvarId => .fvar (map.get! fvarId)
-  assignDelayedMVar goal li src
+  let .some map ← iter | return .none
+  if srcFVarIds.length = srcLCtx.size then
+    let li := srcFVarIds.toArray.map λ fvarId => .fvar (map.get! fvarId)
+    assignDelayedMVar goal li src
+  else
+    goal.withContext do
+    -- Constructs the subsuming expression
+    let .some solution' ← mapFVars solution map
+      | panic! "Solution substitution should not fail"
+    let flag ← goal.checkedAssign solution'
 
-  return true
+  return .subsumed
 protected def GoalState.subsume (state : GoalState) (goal : MVarId) (hist : Array MVarId)
   : MetaM Subsumption := do
   state.restoreMetaM
   for mvarId in hist do
-    if ← canSubsume? goal mvarId then
-      return .subsumed mvarId
+    let r ← canSubsume? goal mvarId
+    if r matches .none then
+      continue
+    return r
   return .none
 
 --- Tactic execution functions ---
