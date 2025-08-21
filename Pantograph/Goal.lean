@@ -413,6 +413,132 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
     fragments,
   }
 
+inductive Subsumption where
+  /-- No subsumption possible -/
+  | none
+  /-- Goal solved by an earlier solved goal -/
+  | subsumed (src : MVarId)
+
+private def mapFVars (expr : Expr) (map : Std.HashMap FVarId FVarId)
+  : CoreM (Option Expr) := OptionT.run $ Core.transform expr λ
+    | .fvar fvarId => do
+      let .some fvarId' := map[fvarId]?
+        | OptionT.fail
+      return .done (.fvar fvarId')
+    | e =>
+      return .continue e
+
+def canSubsume? (goal src : MVarId) : MetaM Bool := do
+  -- Find necessary `FVarIds`
+  let dstFVarIds := List.reverse <|
+    (← goal.getDecl).lctx.foldl (init := []) λ acc decl => decl.fvarId :: acc
+  let solution ← src.withContext do
+    instantiateMVars (.mvar src)
+  -- FIXME: Check cycles before assigning!
+
+  let srcLCtx := (← src.getDecl).lctx
+  let srcFVarIds := List.reverse $ srcLCtx.foldl (init := []) λ acc decl =>
+    if solution.hasExprMVar ∨ solution.containsFVar decl.fvarId then
+      decl.fvarId :: acc
+    else
+      acc
+  let m := srcFVarIds.length
+  let n := dstFVarIds.length
+  if hnm' : n < m then
+    -- The context is smaller, so it is not possible
+    return false
+  else
+  have : n ≥ m := Nat.le_of_not_lt hnm'
+  let rec iter (iDst iSrc iOffset : Nat := 0)
+    (map : Std.HashMap FVarId FVarId := .emptyWithCapacity srcFVarIds.length)
+    : MetaM (Option (Std.HashMap FVarId FVarId)) := do
+    if h_iSrc' : iSrc ≥ m then
+      let flag ← Meta.withIncRecDepth do
+        let targetSrc ← src.withContext src.getType
+        let .some targetSrc' ← mapFVars targetSrc map
+          | pure false
+        goal.withContext do
+          Meta.isDefEqGuarded targetSrc' (← goal.getType)
+      if flag then return map else return .none
+    else if h_iDst' : iDst > n - m then
+      -- Alignment failed
+      return .none
+    else if hi : iSrc + iDst + iOffset ≥ n then
+      -- Restart due to offset exhaustion
+      iter (iDst + 1) 0 0
+    else
+    let srcFVarId := srcFVarIds[iSrc]
+    let dstFVarId := dstFVarIds[iSrc + iDst + iOffset]
+
+    -- Compare the types of the fvars
+    let flag ← Meta.withIncRecDepth do
+      let typeOfSrc ← src.withContext srcFVarId.getType
+      let .some typeOfSrc' ← mapFVars typeOfSrc map
+        | pure false
+      goal.withContext do
+        Meta.isDefEqGuarded typeOfSrc' (← dstFVarId.getType)
+
+    if flag then
+      iter iDst (iSrc + 1) iOffset (map.insert srcFVarId dstFVarId)
+    else
+      -- Pairing is impossible
+      iter iDst iSrc (iOffset + 1) map
+  termination_by (15 + 1 - iDst, 15 + 1 - iSrc + iOffset)
+  decreasing_by
+    sorry
+    sorry
+    sorry
+  /-
+  let rec iter (iDst : Fin (n - m + 1)) (iSrc : Fin (m + 1)) (map : Std.HashMap FVarId FVarId)
+    : MetaM (Option (Std.HashMap FVarId FVarId)) := do
+    if h_iSrc' : iSrc = m then
+      return map
+    else if h_iDst' : iDst = n - m then
+      -- Alignment failed
+      return .none
+    else
+    -- Try alignment
+    have : iSrc.val < m :=
+      have : iSrc ≤ m := Nat.le_of_lt_add_one iSrc.isLt
+      Nat.lt_of_le_of_ne ‹iSrc.val ≤ m› h_iSrc'
+    have : iDst.val < n - m :=
+      have : iDst ≤ n - m := Nat.le_of_lt_add_one iDst.isLt
+      Nat.lt_of_le_of_ne ‹iDst.val ≤ n - m› h_iDst'
+    let srcFVarId := srcFVarIds[iSrc.val]
+    let dstFVarId := dstFVarIds[iDst.val + iSrc.val]
+
+    -- Compare the types of the fvars
+    let flag ← Meta.withIncRecDepth do
+      let typeInSrc ← src.withContext srcFVarId.getType
+      let .some typeInDst ← mapFVars typeInSrc map
+        | pure false
+      Meta.isDefEqGuarded typeInSrc typeInDst
+
+    have : iDst + 1 < n - m + 1 := Nat.add_lt_add_iff_right.mpr ‹iDst < n - m›
+    let iDst' := ⟨iDst + 1, this⟩
+    if flag then
+      -- We can advance one step forward
+      have : iSrc + 1 < m + 1 := Nat.add_lt_add_iff_right.mpr ‹iSrc < m›
+      iter iDst' ⟨iSrc + 1, this⟩ map
+    else
+      -- Pairing is impossible
+      iter iDst' iSrc map
+  -/
+
+  let .some map ← iter | return false
+  -- Constructs the subsuming expression
+  let li := srcFVarIds.toArray.map λ fvarId => .fvar (map.get! fvarId)
+  assignDelayedMVar goal li src
+
+  return true
+protected def GoalState.subsume (state : GoalState) (goal : MVarId) (hist : Array MVarId)
+  : MetaM Subsumption := do
+  state.restoreMetaM
+  for mvarId in hist do
+    if ← canSubsume? goal mvarId then
+      return .subsumed mvarId
+  return .none
+
 --- Tactic execution functions ---
 
 /--
