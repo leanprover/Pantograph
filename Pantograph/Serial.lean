@@ -3,6 +3,7 @@ import Pantograph.Environment
 
 import Lean.Environment
 import Lean.Replay
+import Lean.Util.ShareCommon
 import Std.Data.HashMap
 
 open Lean
@@ -59,7 +60,8 @@ and then add the new constants.
 @[export pantograph_env_pickle_m]
 def environmentPickle (env : Environment) (path : System.FilePath) (background? : Option Environment := .none)
   : IO Unit :=
-  pickle path $ distilEnvironment env background?
+  let distilled := distilEnvironment env background?
+  pickle path (ShareCommon.shareCommon distilled)
 
 def resurrectEnvironment
   (distilled : DistilledEnvironment)
@@ -141,7 +143,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
       | .coe header? expectedType e f? _ => .coe header? expectedType e f? .none
       | k => k
     acc.insert key { val with kind }
-  pickle path ({
+  let compacted : CompactGoalState := {
     env := distilEnvironment env background?,
 
     core := ({ nextMacroScope, ngen, auxDeclNGen } : CompactCoreState),
@@ -152,7 +154,8 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     root,
     parentMVars,
     fragments,
-  } : CompactGoalState)
+  }
+  pickle path (ShareCommon.shareCommon compacted)
 
 @[export pantograph_goal_state_unpickle_m]
 def goalStateUnpickle (path : System.FilePath) (background? : Option Environment := .none)
