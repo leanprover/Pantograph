@@ -468,12 +468,12 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
     else if h_iDst' : iDst > n - m then
       -- Alignment failed
       return .none
-    else if hi : iSrc + iDst + iOffset ≥ n then
+    else if hi' : iSrc + iDst + iOffset ≥ n then
       -- Restart due to offset exhaustion
       iter (iDst + 1) 0 0
     else
-    let srcFVarId := srcFVarIds[iSrc]
-    let dstFVarId := dstFVarIds[iSrc + iDst + iOffset]
+    let srcFVarId := srcFVarIds[iSrc]!
+    let dstFVarId := dstFVarIds[iSrc + iDst + iOffset]!
 
     -- Compare the types of the fvars
     let flag ← Meta.withIncRecDepth do
@@ -488,48 +488,7 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
     else
       -- Pairing is impossible
       iter iDst iSrc (iOffset + 1) map
-  termination_by (15 + 1 - iDst, 15 + 1 - iSrc + iOffset)
-  decreasing_by
-    sorry
-    sorry
-    sorry
-  /-
-  let rec iter (iDst : Fin (n - m + 1)) (iSrc : Fin (m + 1)) (map : Std.HashMap FVarId FVarId)
-    : MetaM (Option (Std.HashMap FVarId FVarId)) := do
-    if h_iSrc' : iSrc = m then
-      return map
-    else if h_iDst' : iDst = n - m then
-      -- Alignment failed
-      return .none
-    else
-    -- Try alignment
-    have : iSrc.val < m :=
-      have : iSrc ≤ m := Nat.le_of_lt_add_one iSrc.isLt
-      Nat.lt_of_le_of_ne ‹iSrc.val ≤ m› h_iSrc'
-    have : iDst.val < n - m :=
-      have : iDst ≤ n - m := Nat.le_of_lt_add_one iDst.isLt
-      Nat.lt_of_le_of_ne ‹iDst.val ≤ n - m› h_iDst'
-    let srcFVarId := srcFVarIds[iSrc.val]
-    let dstFVarId := dstFVarIds[iDst.val + iSrc.val]
-
-    -- Compare the types of the fvars
-    let flag ← Meta.withIncRecDepth do
-      let typeInSrc ← src.withContext srcFVarId.getType
-      let .some typeInDst ← mapFVars typeInSrc map
-        | pure false
-      Meta.isDefEqGuarded typeInSrc typeInDst
-
-    have : iDst + 1 < n - m + 1 := Nat.add_lt_add_iff_right.mpr ‹iDst < n - m›
-    let iDst' := ⟨iDst + 1, this⟩
-    if flag then
-      -- We can advance one step forward
-      have : iSrc + 1 < m + 1 := Nat.add_lt_add_iff_right.mpr ‹iSrc < m›
-      iter iDst' ⟨iSrc + 1, this⟩ map
-    else
-      -- Pairing is impossible
-      iter iDst' iSrc map
-  -/
-
+  termination_by (n + 1 - iDst, n + m - iSrc - iOffset)
   let .some map ← iter | return .none
   if srcFVarIds.length = srcLCtx.size then
     -- Use delayed assignments to avoid duplication. In this case we can
@@ -542,6 +501,8 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
     let .some solution' ← mapFVars solution map
       | panic! "Solution substitution should not fail"
     let flag ← goal.checkedAssign solution'
+    unless flag do
+      throwError "Could not assign subsumption solution"
 
   return .subsumed
 
