@@ -388,7 +388,6 @@ def test_subsume_smaller : TestM Unit := do
   checkEq "subsume" subsumeFlag .subsumed
   goalDst.withContext do
     let expr ← instantiateMVars (.mvar goalDst)
-    IO.println s!"{← Meta.ppExpr expr}"
     Meta.check expr
     checkFalse "assigned" expr.hasExprMVar
 

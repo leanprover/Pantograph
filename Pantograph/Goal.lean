@@ -490,7 +490,8 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
       iter iDst iSrc (iOffset + 1) map
   termination_by (n + 1 - iDst, n + m - iSrc - iOffset)
   let .some map ← iter | return .none
-  if srcFVarIds.length = srcLCtx.size then
+  -- HACK: Why does delayed assignment not work?
+  if false then --srcFVarIds.length = srcLCtx.size then
     -- Use delayed assignments to avoid duplication. In this case we can
     -- directly map between the src and dst free variables.
     let li := srcFVarIds.toArray.map λ fvarId => .fvar (map.get! fvarId)
