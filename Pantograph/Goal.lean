@@ -437,9 +437,6 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
     (← goal.getDecl).lctx.foldl (init := []) λ acc decl => decl.fvarId :: acc
   let solution ← src.withContext do
     instantiateMVars (.mvar src)
-  -- This shows a cycle
-  unless ← occursCheck goal solution do
-    return .cycle
 
   let srcLCtx := (← src.getDecl).lctx
   let srcFVarIds := List.reverse $ srcLCtx.foldl (init := []) λ acc decl =>
@@ -490,6 +487,13 @@ def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
       iter iDst iSrc (iOffset + 1) map
   termination_by (n + 1 - iDst, n + m - iSrc - iOffset)
   let .some map ← iter | return .none
+
+  -- Only signal cycling when there is an exact match
+  unless ← occursCheck goal solution do
+    if n = m then
+      return .cycle
+    else
+      return .none
   -- HACK: Why does delayed assignment not work?
   if false then --srcFVarIds.length = srcLCtx.size then
     -- Use delayed assignments to avoid duplication. In this case we can

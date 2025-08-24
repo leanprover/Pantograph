@@ -371,7 +371,7 @@ def test_subsume_extra_fvar : TestM Unit := do
     Meta.check expr
     checkFalse "assigned" expr.hasExprMVar
 
-/-- This should cause delay assignment. -/
+/-- This should cause delay assignment, if implemented in the most efficient way -/
 def test_subsume_smaller : TestM Unit := do
   let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (q : Prop) (h : p), p ∨ p)) .none
   let goalDst ← Meta.forallTelescope stDst λ _fvars target =>
@@ -391,6 +391,19 @@ def test_subsume_smaller : TestM Unit := do
     Meta.check expr
     checkFalse "assigned" expr.hasExprMVar
 
+/-- Ensure that adding `have` statements will not cause the subsumption to halt -/
+def test_subsume_have : TestM Unit := do
+  let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (q : Prop) (h : p), p ∨ p)) .none
+  let goal0 ← Meta.forallTelescope stDst λ _fvars target =>
+    Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar target
+
+  let { main := goal1, .. } ← goal0.withContext do
+    let type ← Elab.Term.elabTerm (← `(term|q ∨ q)) .none
+    Tactic.«have»  goal0 `h1 type
+
+  let subsumeFlag ← canSubsume? goal1 goal0
+  checkEq "subsume" subsumeFlag .none
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("Instantiate", test_instantiate_mvar),
@@ -404,5 +417,6 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Subsume fail", test_subsume_fail),
     ("Subsume extra fvar", test_subsume_extra_fvar),
     ("Subsume smaller", test_subsume_smaller),
+    ("Subsume have", test_subsume_have),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
