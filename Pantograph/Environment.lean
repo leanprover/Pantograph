@@ -1,5 +1,4 @@
 import Pantograph.Elab
-import Pantograph.Protocol
 import Lean.Environment
 import Lean.Replay
 import Lean.Util.Path
