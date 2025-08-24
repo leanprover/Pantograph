@@ -24,6 +24,7 @@ structure State where
 abbrev MainM := ReaderT Context $ StateRefT State IO
 /-- Main with possible exception -/
 abbrev EMainM := Protocol.FallibleT $ ReaderT Context $ StateRefT State IO
+
 def getMainState : MainM State := get
 
 instance : MonadBacktrack State MainM where
@@ -84,6 +85,7 @@ def runCoreM { α } (coreM : CoreM α) : EMainM α := do
     setEnv state'.env
   liftExcept result
 
+/-- Executes a fallible `CoreM` -/
 def runCoreM' { α } (coreM : Protocol.FallibleT CoreM α) : EMainM α := do
   liftExcept $ ← runCoreM coreM.run
 
@@ -456,6 +458,7 @@ def execute (command : Protocol.Command) : MainM Json := do
   | "goal.start"    => run goal_start
   | "goal.tactic"   => run goal_tactic
   | "goal.continue" => run goal_continue
+  | "goal.subsume" => run goal_subsume
   | "goal.delete"   => run goal_delete
   | "goal.print"    => run goal_print
   | "goal.save"     => run goal_save
@@ -537,8 +540,8 @@ def execute (command : Protocol.Command) : MainM Json := do
       return { stateId, root := goalState.root.name.toString }
   goal_continue (args: Protocol.GoalContinue): EMainM Protocol.GoalContinueResult := do
     let state ← getMainState
-    let .some target := state.goalStates[args.target]? |
-      Protocol.throw $ Protocol.errorIndex s!"Invalid state index {args.target}"
+    let .some target := state.goalStates[args.target]?
+      | throw $ Protocol.errorIndex s!"Invalid state index {args.target}"
     let nextGoalState? : GoalState  ← match args.branch?, args.goals? with
       | .some branchId, .none => do
         match state.goalStates[branchId]? with
@@ -557,6 +560,15 @@ def execute (command : Protocol.Command) : MainM Json := do
         nextStateId,
         goals,
       }
+  goal_subsume (args : Protocol.GoalSubsume) : EMainM Protocol.GoalSubsumeResult := do
+    let state ← getMainState
+    let .some goalState := state.goalStates[args.stateId]?
+      | throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
+    let goal := ⟨args.goal.toName⟩
+    let hist := args.srcs.map (⟨·.toName⟩)
+    let (result, nextGoalState?) ← runCoreM do goalState.subsume goal hist
+    let stateId? ← nextGoalState?.mapM (newGoalState ·)
+    return { stateId?, result }
   goal_delete (args: Protocol.GoalDelete): EMainM Protocol.GoalDeleteResult := do
     let state ← getMainState
     let goalStates := args.stateIds.foldl (λ map id => map.erase id) state.goalStates

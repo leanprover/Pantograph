@@ -121,6 +121,8 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   Execute continuation/resumption
   - `{ "branch": <id> }`: Continue on branch state. The current state must have no goals.
   - `{ "goals": <names> }`: Resume the given goals
+* [Experimental ]`goal.subsume {"stateId": <id>, "goal": <name>, "srcs":
+  <names>}`: determine if any goal in `srcs` subsumes `goal`.
 * `goal.remove {"stateIds": [<id>]}"`: Drop the goal states specified in the list
 * `goal.print {"stateId": <id>}"`: Print a goal state
 * `goal.save { "id": <id>, "path": <fileName> }`, `goal.load { "path": <fileName> }`:
@@ -135,7 +137,7 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   }`: Extract condensed search targets from a file, where coupled search targets
   will be condensed into one. Set `binderName` to override the binder name to
   e.g. `f`. Set `ignoreValues` to false to incorporate existing solutions.
-  
+
   Note that `example`s are not search targets!
 * `frontend.track { "src": <str>, "dst": <str> }`: Check if one file conforms to
   another. The declarations in `src` could have `sorry`s and the declarations in
