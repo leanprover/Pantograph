@@ -413,6 +413,134 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
     fragments,
   }
 
+inductive Subsumption where
+  /-- No subsumption possible -/
+  | none
+  /-- Goal solved by an earlier solved goal -/
+  | subsumed
+  /-- Generated a cycle -/
+  | cycle
+  deriving DecidableEq, BEq, Repr
+
+private def mapFVars (expr : Expr) (map : Std.HashMap FVarId FVarId)
+  : CoreM (Option Expr) := OptionT.run $ Core.transform expr λ
+    | .fvar fvarId => do
+      let .some fvarId' := map[fvarId]?
+        | OptionT.fail
+      return .done (.fvar fvarId')
+    | e =>
+      return .continue e
+
+def canSubsume? (goal src : MVarId) : MetaM Subsumption := do
+  -- Find necessary `FVarIds`
+  let dstFVarIds := List.reverse <|
+    (← goal.getDecl).lctx.foldl (init := []) λ acc decl => decl.fvarId :: acc
+  let solution ← src.withContext do
+    instantiateMVars (.mvar src)
+
+  let srcLCtx := (← src.getDecl).lctx
+  let srcFVarIds := List.reverse $ srcLCtx.foldl (init := []) λ acc decl =>
+    if solution.hasExprMVar ∨ solution.containsFVar decl.fvarId then
+      decl.fvarId :: acc
+    else
+      acc
+  let m := srcFVarIds.length
+  let n := dstFVarIds.length
+  if hnm' : n < m then
+    -- The context is smaller, so it is not possible
+    return .none
+  else
+  have : n ≥ m := Nat.le_of_not_lt hnm'
+  let rec iter (iDst iSrc iOffset : Nat := 0)
+    (map : Std.HashMap FVarId FVarId := .emptyWithCapacity srcFVarIds.length)
+    : MetaM (Option (Std.HashMap FVarId FVarId)) := do
+    if h_iSrc' : iSrc ≥ m then
+      let flag ← Meta.withIncRecDepth do
+        let targetSrc ← src.withContext src.getType
+        let .some targetSrc' ← mapFVars targetSrc map
+          | pure false
+        goal.withContext do
+          Meta.isDefEqGuarded targetSrc' (← goal.getType)
+      if flag then return map else return .none
+    else if h_iDst' : iDst > n - m then
+      -- Alignment failed
+      return .none
+    else if hi' : iSrc + iDst + iOffset ≥ n then
+      -- Restart due to offset exhaustion
+      iter (iDst + 1) 0 0
+    else
+    let srcFVarId := srcFVarIds[iSrc]!
+    let dstFVarId := dstFVarIds[iSrc + iDst + iOffset]!
+
+    -- Compare the types of the fvars
+    let flag ← Meta.withIncRecDepth do
+      let typeOfSrc ← src.withContext srcFVarId.getType
+      let .some typeOfSrc' ← mapFVars typeOfSrc map
+        | pure false
+      goal.withContext do
+        Meta.isDefEqGuarded typeOfSrc' (← dstFVarId.getType)
+
+    if flag then
+      iter iDst (iSrc + 1) iOffset (map.insert srcFVarId dstFVarId)
+    else
+      -- Pairing is impossible
+      iter iDst iSrc (iOffset + 1) map
+  termination_by (n + 1 - iDst, n + m - iSrc - iOffset)
+  let .some map ← iter | return .none
+
+  -- Only signal cycling when there is an exact match
+  unless ← occursCheck goal solution do
+    if n = m then
+      return .cycle
+    else
+      return .none
+  -- HACK: Why does delayed assignment not work?
+  if false then --srcFVarIds.length = srcLCtx.size then
+    -- Use delayed assignments to avoid duplication. In this case we can
+    -- directly map between the src and dst free variables.
+    let li := srcFVarIds.toArray.map λ fvarId => .fvar (map.get! fvarId)
+    assignDelayedMVar goal li src
+  else
+    goal.withContext do
+    -- Constructs the subsuming expression
+    let .some solution' ← mapFVars solution map
+      | panic! "Solution substitution should not fail"
+    let flag ← goal.checkedAssign solution'
+    unless flag do
+      throwError "Could not assign subsumption solution"
+
+  return .subsumed
+
+def subsumeAny (goal : MVarId) (hist : Array MVarId)
+  : MetaM Subsumption := do
+  if (← goal.findDecl?).isNone then
+    throwError "Nonexistent metavariable: {goal.name}"
+  for mvarId in hist do
+    if (← mvarId.findDecl?).isNone then
+      throwError "Nonexistent historical metavariable: {mvarId.name}"
+    let r ← canSubsume? goal mvarId
+    if r matches .none then
+      continue
+    return r
+  return .none
+
+protected def GoalState.subsume (state : GoalState) (goal : MVarId) (hist : Array MVarId)
+  : CoreM (Subsumption × Option GoalState) := Meta.MetaM.run' do
+  state.restoreMetaM
+  let sub ← subsumeAny goal hist
+  let nextState? ← match sub with
+    | .none | .cycle => pure .none
+    | .subsumed =>
+      let nextGoals := state.goals.filter (· != goal)
+      let nextState := {
+        state with savedState := {
+          state.savedState with tactic := {
+            goals := nextGoals }
+          }
+        }
+      pure $ .some nextState
+  return (sub, nextState?)
+
 --- Tactic execution functions ---
 
 /--

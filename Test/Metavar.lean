@@ -336,6 +336,74 @@ def test_replay_environment : TestM Unit := do
   let root ← unfoldAuxLemmas root
   checkEq "(root unfold)" (toString $ ← Meta.ppExpr root) "⟨sorry, sorry⟩"
 
+def test_subsume_fail : TestM Unit := do
+  let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop), p → p ∨ p)) .none
+  let goalDst ← Meta.forallTelescope stDst λ _fvars target =>
+    Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar target
+
+  let st ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (f : (q : Prop) → q → q ∨ q), p → p ∨ p)) .none
+  let goalSrc ← Meta.forallBoundedTelescope st (maxFVars? := .some 2) λ _fvars target => do
+    let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
+    let solution ← Elab.Term.elabTerm (← `(term|f p)) target
+    goal.assign solution
+    return goal
+  let subsumeFlag ← canSubsume? goalDst goalSrc
+  checkEq "¬ subsume" subsumeFlag .none
+  checkFalse "¬ assigned" $ ← goalDst.isAssignedOrDelayedAssigned
+
+def test_subsume_extra_fvar : TestM Unit := do
+  let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop), p → p ∨ p)) .none
+  let goalDst ← Meta.forallTelescope stDst λ _fvars target =>
+    Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar target
+
+  let st ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (q : Prop) (h : p), p ∨ p)) .none
+  let goalSrc ← Meta.forallTelescope st λ fvars target => do
+    checkEq "fvars" fvars.size 3
+    let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
+    let solution ← instantiateMVars $ ← Elab.Term.elabTerm (← `(term|Or.inl h)) target
+    goal.assign solution
+    checkFalse "solution mvar" solution.hasExprMVar
+    return goal
+  let subsumeFlag ← canSubsume? goalDst goalSrc
+  checkEq "subsume" subsumeFlag .subsumed
+  goalDst.withContext do
+    let expr ← instantiateMVars (.mvar goalDst)
+    Meta.check expr
+    checkFalse "assigned" expr.hasExprMVar
+
+/-- This should cause delay assignment, if implemented in the most efficient way -/
+def test_subsume_smaller : TestM Unit := do
+  let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (q : Prop) (h : p), p ∨ p)) .none
+  let goalDst ← Meta.forallTelescope stDst λ _fvars target =>
+    Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar target
+
+  let st ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (h : p), p ∨ p)) .none
+  let goalSrc ← Meta.forallTelescope st λ _fvars target => do
+    let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
+    let solution ← instantiateMVars $ ← Elab.Term.elabTerm (← `(term|Or.inl h)) target
+    goal.assign solution
+    checkFalse "solution mvar" solution.hasExprMVar
+    return goal
+  let subsumeFlag ← canSubsume? goalDst goalSrc
+  checkEq "subsume" subsumeFlag .subsumed
+  goalDst.withContext do
+    let expr ← instantiateMVars (.mvar goalDst)
+    Meta.check expr
+    checkFalse "assigned" expr.hasExprMVar
+
+/-- Ensure that adding `have` statements will not cause the subsumption to halt -/
+def test_subsume_have : TestM Unit := do
+  let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (q : Prop) (h : p), p ∨ p)) .none
+  let goal0 ← Meta.forallTelescope stDst λ _fvars target =>
+    Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar target
+
+  let { main := goal1, .. } ← goal0.withContext do
+    let type ← Elab.Term.elabTerm (← `(term|q ∨ q)) .none
+    Tactic.«have»  goal0 `h1 type
+
+  let subsumeFlag ← canSubsume? goal1 goal0
+  checkEq "subsume" subsumeFlag .none
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("Instantiate", test_instantiate_mvar),
@@ -346,5 +414,9 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Branch Unification", test_branch_unification),
     ("Restore NGen", test_restore_ngen),
     ("Replay Environment", test_replay_environment),
+    ("Subsume fail", test_subsume_fail),
+    ("Subsume extra fvar", test_subsume_extra_fvar),
+    ("Subsume smaller", test_subsume_smaller),
+    ("Subsume have", test_subsume_have),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
