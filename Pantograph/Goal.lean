@@ -392,7 +392,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
         throwError "Conflicting assignment of expr metavariable (d != d) {mvarId.name}"
 
     let m ← Meta.saveState
-    let goals ← goals.filterM (not <$> ·.isAssigned)
+    let goals ← goals.filterM (not <$> ·.isAssignedOrDelayedAssigned)
     pure (m, goals)
 
   let fragments ← src'.fragments.foldM (init := dst.fragments) λ acc mvarId' fragment' => do
