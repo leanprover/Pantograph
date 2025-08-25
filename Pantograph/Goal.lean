@@ -358,7 +358,9 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       mctx,
     },
   }
-  let m : MetaM Meta.SavedState := Meta.withMCtx mctx do
+  let goals := dst.savedState.tactic.goals ++
+    src'.savedState.tactic.goals.map (⟨mapId ·.name⟩)
+  let m : MetaM _ := Meta.withMCtx mctx do
     savedMeta.restore
 
     for (lmvarId, l') in src'.mctx.lAssignment do
@@ -389,15 +391,17 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       unless d == d' do
         throwError "Conflicting assignment of expr metavariable (d != d) {mvarId.name}"
 
-    Meta.saveState
-  let goals := dst.savedState.tactic.goals ++
-    src'.savedState.tactic.goals.map (⟨mapId ·.name⟩)
+    let m ← Meta.saveState
+    let goals ← goals.filterM (not <$> ·.isAssigned)
+    pure (m, goals)
+
   let fragments ← src'.fragments.foldM (init := dst.fragments) λ acc mvarId' fragment' => do
     let mvarId := ⟨mapId mvarId'.name⟩
     let fragment ← fragment'.map mapExpr
     if let .some _fragment0 := acc[mvarId]? then
       throwError "Conflicting fragments on {mvarId.name}"
     return acc.insert mvarId fragment
+  let («meta», goals) ← m.run'
   return {
     dst with
     savedState := {
@@ -406,7 +410,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       },
       term := {
         savedTerm with
-        «meta» := ← m.run',
+        «meta»,
       },
     },
     parentMVars := dst.parentMVars ++ src.parentMVars.map mapMVar,
@@ -435,23 +439,24 @@ private def mapFVars (expr : Expr) (map : Std.HashMap FVarId FVarId)
 def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
   : MetaM Subsumption := do
   -- Find necessary `FVarIds`
-  let dstFVarIds := List.reverse <|
-    (← goal.getDecl).lctx.foldl (init := []) λ acc decl => decl.fvarId :: acc
-  let (solution, srcLCtx) ← withSrcMCtx do
-    let solution ← src.withContext do
-      instantiateMVars (.mvar src)
+  let dstFVarIds := (← goal.getDecl).lctx.foldr (init := [])
+    λ decl acc => decl.fvarId :: acc
+  let (solution, srcFVarIds) ← withSrcMCtx do src.withContext do
+    let solution ← instantiateMVars (.mvar src)
 
     let srcLCtx := (← src.getDecl).lctx
-    return (solution, srcLCtx)
+
+    let { fvarSet := solutionFVars, .. } ← (collectFVars {} solution).addDependencies
+    let srcFVarIds ← srcLCtx.foldrM (init := []) λ decl acc => do
+      if solution.hasExprMVar ∨ solutionFVars.contains decl.fvarId  then
+        return decl.fvarId :: acc
+      else
+        return acc
+    return (solution, srcFVarIds)
 
   if srcMCtx?.isSome ∧ solution.hasExprMVar then
     return .none
 
-  let srcFVarIds := List.reverse $ srcLCtx.foldl (init := []) λ acc decl =>
-    if solution.hasExprMVar ∨ solution.containsFVar decl.fvarId then
-      decl.fvarId :: acc
-    else
-      acc
   let m := srcFVarIds.length
   let n := dstFVarIds.length
   if hnm' : n < m then
@@ -465,7 +470,11 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     : MetaM (Option (Std.HashMap FVarId FVarId)) := do
     if iSrc ≥ m then
       -- With mctx depth to prevent any mvar assignment.
-      let targetSrc ← withSrcMCtx do src.withContext src.getType
+      let targetSrc ← withSrcMCtx do src.withContext do
+        instantiateMVars $ ← src.getType
+      if targetSrc.hasExprMVar then
+        return .none
+
       let flag ← Meta.withNewMCtxDepth do
         let .some targetSrc' ← mapFVars targetSrc map
           | pure false
@@ -484,14 +493,19 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
 
     -- Compare the types and values of the fvars
     let (srcFVarType, srcFVarValue?) ← withSrcMCtx <| src.withContext do
-      return (← srcFVarId.getType, ← srcFVarId.getValue?)
+      let type ← instantiateMVars $ ← srcFVarId.getType
+      let value ← (← srcFVarId.getValue?).mapM instantiateMVars
+      return (type, value)
+    if srcFVarType.hasExprMVar || (srcFVarValue?.map Expr.hasExprMVar |>.getD false) then
+      return .none
     let flag ← Meta.withIncRecDepth do
       let .some srcFVarType' ← mapFVars srcFVarType map
         | pure false
       let srcFVarValue'? ← match ← srcFVarValue?.mapM (mapFVars · map) with
         | .some (.some value) => pure $ some value
         | .none => pure none
-        | .some .none => return false
+        | .some .none =>
+          return false
       goal.withContext do
         let flagValue ← match srcFVarValue'?, ← dstFVarId.getValue? with
           | .some v1, .some v2 => isEq v1 v2
@@ -566,13 +580,18 @@ protected def GoalState.subsume
   let nextState? ← match sub with
     | .none | .cycle => pure .none
     | .subsumed =>
+      assert! ← goal.isAssignedOrDelayedAssigned
       let nextGoals := state.goals.filter (· != goal)
       let nextState := {
         state with savedState := {
-          state.savedState with tactic := {
-            goals := nextGoals }
+          state.savedState with
+          tactic := { goals := nextGoals },
+          term := {
+            state.savedState.term with
+            «meta» := ← saveState
           }
         }
+      }
       pure $ .some nextState
   return (sub, nextState?)
 
