@@ -313,9 +313,11 @@ structure GoalContinueResult where
 structure GoalSubsume where
   stateId : Nat
   goal : String
+  srcStateId? : Option Nat := .none
   srcs : Array String
   deriving Lean.FromJson
 deriving instance Lean.ToJson for Subsumption
+/-- To reconstruct the state, remove `goal` from the `stateId` in the input -/
 structure GoalSubsumeResult where
   stateId? : Option Nat := .none
   result : Subsumption

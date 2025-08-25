@@ -559,9 +559,15 @@ def execute (command: Protocol.Command): MainM Json := do
     let state ← getMainState
     let .some goalState := state.goalStates[args.stateId]?
       | throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
+    let srcGoalState? ← match args.srcStateId? with
+      | .some id => do
+        let .some srcGoalState := state.goalStates[args.stateId]?
+          | throw $ Protocol.errorIndex s!"Invalid src state index {id}"
+        pure $ .some srcGoalState
+      | .none => pure .none
     let goal := ⟨args.goal.toName⟩
     let hist := args.srcs.map (⟨·.toName⟩)
-    let (result, nextGoalState?) ← runCoreM do goalState.subsume goal hist
+    let (result, nextGoalState?) ← runCoreM do goalState.subsume goal hist srcGoalState?
     let stateId? ← nextGoalState?.mapM (newGoalState ·)
     return { stateId?, result }
   goal_delete (args: Protocol.GoalDelete): EMainM Protocol.GoalDeleteResult := do

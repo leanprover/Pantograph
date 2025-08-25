@@ -404,6 +404,51 @@ def test_subsume_have : TestM Unit := do
   let subsumeFlag ← canSubsume? goal1 goal0
   checkEq "subsume" subsumeFlag .none
 
+/-- Unfolding not `@[reducible]` declarations should not immediately lead to cycles -/
+def test_subsume_unfold (reducible : Bool) : TestM Unit := do
+  let annotation := if reducible then "@[reducible]\n" else ""
+  let env ← extractEnvAfterUnit (← getEnv) s!"{annotation}def f (n : Nat) := n * 2"
+  withEnv env do
+  let identF := mkIdent `f
+  let rootTarget ← Elab.Term.elabTerm (← `(term|∀ (n : Nat), $identF n = n + 1)) .none
+  let state0 ← GoalState.create rootTarget
+  let .success state1 _ ← state0.tacticOn' 0 (← `(tactic|intro n))
+    | fail "intro failed"
+  let .success state2 _ ← state1.tacticOn' 0 (← `(tactic|unfold $identF))
+    | fail "unfold failed"
+  let (subsumeFlag, state3?) ← state2.subsume (state2.goals[0]!) state1.goalsArray
+  checkTrue "state" state3?.isNone
+  if reducible then
+    checkEq "subsume" subsumeFlag .cycle
+  else
+    checkEq "subsume" subsumeFlag .none
+
+def test_subsume_cross_branch : TestM Unit := do
+  let rootTarget ← Elab.Term.elabTerm (← `(term|∀ (p : Prop), p → p ∧ p)) .none
+  let state0 ← GoalState.create rootTarget
+  let .success state1 _ ← state0.tacticOn' 0 (← `(tactic|intro p h))
+    | fail "intro failed"
+  let .success state2 _ ← state1.tacticOn' 0 (← `(tactic|apply And.intro))
+    | fail "apply failed"
+  let .success state3 _ ← state2.tacticOn' 0 (← `(tactic|exact h))
+    | fail "exact failed"
+  checkEq "state3" state3.goals.length 0
+  let goalR := state2.goals[1]!
+  let goalL := state2.goals[0]!
+  let (subsumeFlag, state4?) ← state2.subsume goalR #[goalL] (srcState? := state3)
+  checkEq "subsume" subsumeFlag .subsumed
+  let .some state4 := state4?
+    | fail "State must be present"
+  state4.withContext goalR do
+    checkTrue "state4/goalR" (← goalR.isAssigned)
+  checkEq "state4" state4.goals.length 1
+  let state5 ← state3.replay state2 state4
+  checkEq "state goals" state5.goals.length 0
+  state5.withParentContext do
+    checkTrue "state5/goalL" (← goalL.isAssigned)
+    checkTrue "state5/goalR" (← goalR.isAssigned)
+  checkTrue "state" state5.isSolved
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("Instantiate", test_instantiate_mvar),
@@ -418,5 +463,8 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Subsume extra fvar", test_subsume_extra_fvar),
     ("Subsume smaller", test_subsume_smaller),
     ("Subsume have", test_subsume_have),
+    ("Subsume unfold irreducible", test_subsume_unfold false),
+    ("Subsume unfold reducible", test_subsume_unfold true),
+    ("Subsume cross branch", test_subsume_cross_branch),
   ]
   tests.map (fun (name, test) => (name, proofRunner env test))
