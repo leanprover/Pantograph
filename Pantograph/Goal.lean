@@ -463,16 +463,16 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
   let rec iter (iDst iSrc iOffset : Nat := 0)
     (map : Std.HashMap FVarId FVarId := .emptyWithCapacity srcFVarIds.length)
     : MetaM (Option (Std.HashMap FVarId FVarId)) := do
-    if h_iSrc' : iSrc ≥ m then
+    if iSrc ≥ m then
       -- With mctx depth to prevent any mvar assignment.
       let targetSrc ← withSrcMCtx do src.withContext src.getType
       let flag ← Meta.withNewMCtxDepth do
         let .some targetSrc' ← mapFVars targetSrc map
           | pure false
         goal.withContext do
-          Meta.isDefEqGuarded targetSrc' (← goal.getType)
+          isEq targetSrc' (← goal.getType)
       if flag then return map else return .none
-    else if h_iDst' : iDst > n - m then
+    else if iDst > n - m then
       -- Alignment failed
       return .none
     else if hi' : iSrc + iDst + iOffset ≥ n then
@@ -482,13 +482,23 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     let srcFVarId := srcFVarIds[iSrc]!
     let dstFVarId := dstFVarIds[iSrc + iDst + iOffset]!
 
-    -- Compare the types of the fvars
-    let typeOfSrc ← withSrcMCtx do src.withContext srcFVarId.getType
+    -- Compare the types and values of the fvars
+    let (srcFVarType, srcFVarValue?) ← withSrcMCtx <| src.withContext do
+      return (← srcFVarId.getType, ← srcFVarId.getValue?)
     let flag ← Meta.withIncRecDepth do
-      let .some typeOfSrc' ← mapFVars typeOfSrc map
+      let .some srcFVarType' ← mapFVars srcFVarType map
         | pure false
+      let srcFVarValue'? ← match ← srcFVarValue?.mapM (mapFVars · map) with
+        | .some (.some value) => pure $ some value
+        | .none => pure none
+        | .some .none => return false
       goal.withContext do
-        Meta.isDefEqGuarded typeOfSrc' (← dstFVarId.getType)
+        let flagValue ← match srcFVarValue'?, ← dstFVarId.getValue? with
+          | .some v1, .some v2 => isEq v1 v2
+          | .none, .none => pure true
+          | _, _ => pure false
+        let flagType ← isEq srcFVarType' (← dstFVarId.getType)
+        return flagType ∧ flagValue
 
     if flag then
       iter iDst (iSrc + 1) iOffset (map.insert srcFVarId dstFVarId)
@@ -531,6 +541,8 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     match srcMCtx? with
     | .some mctx => Meta.withMCtx mctx m
     | .none => m
+  isEq (e1 e2 : Expr) : MetaM Bool :=
+    Meta.withReducible $ Meta.isDefEqGuarded e1 e2
 
 def subsumeAny (goal : MVarId) (hist : Array MVarId) (srcMCtx? : Option MetavarContext := .none)
   : MetaM Subsumption := do

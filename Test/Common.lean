@@ -1,6 +1,7 @@
 import Pantograph.Goal
 import Pantograph.Library
 import Pantograph.Protocol
+import Pantograph.Frontend
 import LSpec
 
 namespace Pantograph
@@ -128,6 +129,13 @@ def mvarUserNameAndType (mvarId: MVarId): MetaM (Name × String) := do
   let t ← exprToStr (← mvarId.getType)
   return (name, t)
 
+def extractEnvAfterUnit (env : Environment) (unit : String)
+  : IO Environment := do
+  let (context, state) ← Frontend.createContextStateFromFile
+    (file := unit) (env? := .some env)
+  let m := show Frontend.FrontendM _ from Frontend.executeFrontend λ _ => pure ()
+  let (_, state) ← m.run {} |>.run context |>.run state
+  return state.commandState.env
 
 -- Monadic testing
 
