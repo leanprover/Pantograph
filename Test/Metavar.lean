@@ -416,12 +416,14 @@ def test_subsume_unfold (reducible : Bool) : TestM Unit := do
     | fail "intro failed"
   let .success state2 _ ← state1.tacticOn' 0 (← `(tactic|unfold $identF))
     | fail "unfold failed"
-  let (subsumeFlag, state3?) ← state2.subsume (state2.goals[0]!) state1.goalsArray
+  let (subsumeFlag, state3?, subsumptor?) ← state2.subsume (state2.goals[0]!) state1.goalsArray
   checkTrue "state" state3?.isNone
   if reducible then
     checkEq "subsume" subsumeFlag .cycle
+    checkTrue "subsumptor?" <| subsumptor? == state1.goals[0]!
   else
     checkEq "subsume" subsumeFlag .none
+    checkTrue "subsumptor?" subsumptor?.isNone
 
 def test_subsume_cross_branch : TestM Unit := do
   let rootTarget ← Elab.Term.elabTerm (← `(term|∀ (p : Prop), p → p ∧ p)) .none
@@ -435,10 +437,11 @@ def test_subsume_cross_branch : TestM Unit := do
   checkEq "state3" state3.goals.length 0
   let goalR := state2.goals[1]!
   let goalL := state2.goals[0]!
-  let (subsumeFlag, state4?) ← state2.subsume goalR #[goalL] (srcState? := state3)
+  let (subsumeFlag, state4?, subsumptor?) ← state2.subsume goalR #[goalL] (srcState? := state3)
   checkEq "subsume" subsumeFlag .subsumed
   let .some state4 := state4?
     | fail "State must be present"
+  checkTrue "subsumptor?" <| subsumptor? == goalL
   state4.withContext goalR do
     checkTrue "state4/goalR" (← goalR.isAssigned)
   checkEq "state4" state4.goals.length 1

@@ -564,7 +564,7 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     Meta.withReducible $ Meta.isDefEqGuarded e1 e2
 
 def subsumeAny (goal : MVarId) (hist : Array MVarId) (srcMCtx? : Option MetavarContext := .none)
-  : MetaM Subsumption := do
+  : MetaM (Subsumption × Option MVarId) := do
   if (← goal.findDecl?).isNone then
     throwError "Nonexistent metavariable: {goal.name}"
   for mvarId in hist do
@@ -573,15 +573,15 @@ def subsumeAny (goal : MVarId) (hist : Array MVarId) (srcMCtx? : Option MetavarC
     let r ← canSubsume? goal mvarId srcMCtx?
     if r matches .none then
       continue
-    return r
-  return .none
+    return (r, mvarId)
+  return (.none, .none)
 
 protected def GoalState.subsume
   (state : GoalState) (goal : MVarId) (hist : Array MVarId)
   (srcState? : Option GoalState := .none)
-  : CoreM (Subsumption × Option GoalState) := Meta.MetaM.run' do
+  : CoreM (Subsumption × Option GoalState × Option MVarId) := Meta.MetaM.run' do
   state.restoreMetaM
-  let sub ← subsumeAny goal hist (srcMCtx? := srcState?.map (·.mctx))
+  let (sub, subsumptor?) ← subsumeAny goal hist (srcMCtx? := srcState?.map (·.mctx))
   let nextState? ← match sub with
     | .none | .cycle => pure .none
     | .subsumed =>
@@ -598,7 +598,7 @@ protected def GoalState.subsume
         }
       }
       pure $ .some nextState
-  return (sub, nextState?)
+  return (sub, nextState?, subsumptor?)
 
 --- Tactic execution functions ---
 
