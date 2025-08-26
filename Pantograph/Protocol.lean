@@ -312,14 +312,15 @@ structure GoalContinueResult where
   deriving Lean.ToJson
 structure GoalSubsume where
   stateId : Nat
-  goal : String
+  goal : Lean.Name
   srcStateId? : Option Nat := .none
-  srcs : Array String
+  srcs : Array Lean.Name
   deriving Lean.FromJson
 deriving instance Lean.ToJson for Subsumption
 /-- To reconstruct the state, remove `goal` from the `stateId` in the input -/
 structure GoalSubsumeResult where
   stateId? : Option Nat := .none
+  subsumptor? : Option Lean.Name := .none
   result : Subsumption
   deriving Lean.ToJson
 

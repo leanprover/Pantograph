@@ -435,7 +435,9 @@ private def mapFVars (expr : Expr) (map : Std.HashMap FVarId FVarId)
     | e =>
       return .continue e
 
-/-- Determine if `goal` can be subsumed by `src`. If `srcMCtx?` is provided, it will assume the goals are not in the same mctx. -/
+/-- Determine if `goal` can be subsumed by `src`. If `srcMCtx?` is provided, it
+will assume the goals are not in the same mctx. This will disable subsumption in
+the case where `src` has mvars. -/
 def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
   : MetaM Subsumption := do
   -- Find necessary `FVarIds`
@@ -465,6 +467,9 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
   else
 
   have : n ≥ m := Nat.le_of_not_lt hnm'
+  -- `iDst` is the difference between the starting indices. Given that the dst
+  -- context is at least as large as the src context, this value can be at most
+  -- `n - m`. `iOffset` is the number of skipped fvars.
   let rec iter (iDst iSrc iOffset : Nat := 0)
     (map : Std.HashMap FVarId FVarId := .emptyWithCapacity srcFVarIds.length)
     : MetaM (Option (Std.HashMap FVarId FVarId)) := do
@@ -482,7 +487,6 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
           isEq targetSrc' (← goal.getType)
       if flag then return map else return .none
     else if iDst > n - m then
-      -- Alignment failed
       return .none
     else if hi' : iSrc + iDst + iOffset ≥ n then
       -- Restart due to offset exhaustion
@@ -496,7 +500,7 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
       let type ← instantiateMVars $ ← srcFVarId.getType
       let value ← (← srcFVarId.getValue?).mapM instantiateMVars
       return (type, value)
-    if srcFVarType.hasExprMVar || (srcFVarValue?.map Expr.hasExprMVar |>.getD false) then
+    if srcFVarType.hasExprMVar ∨ (srcFVarValue?.map Expr.hasExprMVar |>.getD false) then
       return .none
     let flag ← Meta.withIncRecDepth do
       let .some srcFVarType' ← mapFVars srcFVarType map
@@ -515,9 +519,10 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
         return flagType ∧ flagValue
 
     if flag then
+      -- Match is possible.
       iter iDst (iSrc + 1) iOffset (map.insert srcFVarId dstFVarId)
     else
-      -- Pairing is impossible
+      -- Try the next match point
       iter iDst iSrc (iOffset + 1) map
   termination_by (n + 1 - iDst, n + m - iSrc - iOffset)
 
@@ -559,7 +564,7 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     Meta.withReducible $ Meta.isDefEqGuarded e1 e2
 
 def subsumeAny (goal : MVarId) (hist : Array MVarId) (srcMCtx? : Option MetavarContext := .none)
-  : MetaM Subsumption := do
+  : MetaM (Subsumption × Option MVarId) := do
   if (← goal.findDecl?).isNone then
     throwError "Nonexistent metavariable: {goal.name}"
   for mvarId in hist do
@@ -568,15 +573,15 @@ def subsumeAny (goal : MVarId) (hist : Array MVarId) (srcMCtx? : Option MetavarC
     let r ← canSubsume? goal mvarId srcMCtx?
     if r matches .none then
       continue
-    return r
-  return .none
+    return (r, mvarId)
+  return (.none, .none)
 
 protected def GoalState.subsume
   (state : GoalState) (goal : MVarId) (hist : Array MVarId)
   (srcState? : Option GoalState := .none)
-  : CoreM (Subsumption × Option GoalState) := Meta.MetaM.run' do
+  : CoreM (Subsumption × Option GoalState × Option MVarId) := Meta.MetaM.run' do
   state.restoreMetaM
-  let sub ← subsumeAny goal hist (srcMCtx? := srcState?.map (·.mctx))
+  let (sub, subsumptor?) ← subsumeAny goal hist (srcMCtx? := srcState?.map (·.mctx))
   let nextState? ← match sub with
     | .none | .cycle => pure .none
     | .subsumed =>
@@ -593,7 +598,7 @@ protected def GoalState.subsume
         }
       }
       pure $ .some nextState
-  return (sub, nextState?)
+  return (sub, nextState?, subsumptor?)
 
 --- Tactic execution functions ---
 
