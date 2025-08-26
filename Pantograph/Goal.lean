@@ -358,7 +358,9 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       mctx,
     },
   }
-  let m : MetaM Meta.SavedState := Meta.withMCtx mctx do
+  let goals := dst.savedState.tactic.goals ++
+    src'.savedState.tactic.goals.map (⟨mapId ·.name⟩)
+  let m : MetaM _ := Meta.withMCtx mctx do
     savedMeta.restore
 
     for (lmvarId, l') in src'.mctx.lAssignment do
@@ -389,15 +391,17 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       unless d == d' do
         throwError "Conflicting assignment of expr metavariable (d != d) {mvarId.name}"
 
-    Meta.saveState
-  let goals := dst.savedState.tactic.goals ++
-    src'.savedState.tactic.goals.map (⟨mapId ·.name⟩)
+    let m ← Meta.saveState
+    let goals ← goals.filterM (not <$> ·.isAssignedOrDelayedAssigned)
+    pure (m, goals)
+
   let fragments ← src'.fragments.foldM (init := dst.fragments) λ acc mvarId' fragment' => do
     let mvarId := ⟨mapId mvarId'.name⟩
     let fragment ← fragment'.map mapExpr
     if let .some _fragment0 := acc[mvarId]? then
       throwError "Conflicting fragments on {mvarId.name}"
     return acc.insert mvarId fragment
+  let («meta», goals) ← m.run'
   return {
     dst with
     savedState := {
@@ -406,7 +410,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
       },
       term := {
         savedTerm with
-        «meta» := ← m.run',
+        «meta»,
       },
     },
     parentMVars := dst.parentMVars ++ src.parentMVars.map mapMVar,
@@ -571,18 +575,6 @@ protected def GoalState.tryAssign (state : GoalState) (site : Site) (expr : Stri
     | .ok syn => pure syn
     | .error error => return .parseError error
   state.tryTacticM site $ Tactic.evalAssign expr
-
-protected def GoalState.tryLet (state : GoalState) (site : Site) (binderName : String) (type : String)
-    : Elab.TermElabM TacticResult := do
-  state.restoreElabM
-  let type ← match Parser.runParserCategory
-    (env := ← MonadEnv.getEnv)
-    (catName := `term)
-    (input := type)
-    (fileName := ← getFileName) with
-    | .ok syn => pure syn
-    | .error error => return .parseError error
-  state.tryTacticM site $ Tactic.evalLet binderName.toName type
 
 /-- Enter conv tactic mode -/
 @[export pantograph_goal_state_conv_enter_m]
