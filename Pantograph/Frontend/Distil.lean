@@ -84,7 +84,7 @@ def collectTacticsFromCompilationStep (step : CompilationStep) : IO (List Protoc
       -- FIXME: Why does this not work? There are problems with `term.pseudo.antiquot`
       --PrettyPrinter.ppTactic ⟨invocation.info.stx⟩
       --return t.pretty
-    let usedConstants := invocation.usedConstants.toArray.map λ n => n.toString
+    let usedConstants := invocation.usedConstants.toArray
     return {
       goalBefore,
       goalAfter,

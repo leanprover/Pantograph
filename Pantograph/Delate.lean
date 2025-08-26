@@ -441,7 +441,7 @@ def serializeExpression (options: @&Protocol.Options) (e: Expr): MetaM Protocol.
     | true => pure $ .some $ ← serializeExpressionSexp e
     | false => pure $ .none
   let dependentMVars? ← match options.printDependentMVars with
-    | true => pure $ .some $ (← Meta.getMVars e).map (λ mvarId => mvarId.name.toString)
+    | true => pure $ .some $ (← Meta.getMVars e).map (·.name)
     | false => pure $ .none
   return {
     pp?,
@@ -463,14 +463,14 @@ def serializeGoal (options: @&Protocol.Options) (goal: MVarId) (mvarDecl: Metava
       match localDecl with
       | .cdecl _ fvarId userName _ _ _ =>
         return {
-          name := fvarId.name.toString,
-          userName:= ofName userName.simpMacroScopes,
+          name := fvarId.name,
+          userName:= userName.eraseMacroScopes,
           isInaccessible := userName.isInaccessibleUserName
         }
       | .ldecl _ fvarId userName _ _ _ _ => do
         return {
-          name := fvarId.name.toString,
-          userName := toString userName.simpMacroScopes,
+          name := fvarId.name,
+          userName := userName.eraseMacroScopes,
           isInaccessible := userName.isInaccessibleUserName
         }
     let ppVar (localDecl : LocalDecl) : MetaM Protocol.Variable := do
@@ -479,13 +479,13 @@ def serializeGoal (options: @&Protocol.Options) (goal: MVarId) (mvarDecl: Metava
         let userName := userName.simpMacroScopes
         let type ← instantiate type
         return {
-          name := fvarId.name.toString,
-          userName:= ofName userName,
+          name := fvarId.name,
+          userName:= userName,
           isInaccessible := userName.isInaccessibleUserName
           type? := .some (← serializeExpression options type)
         }
       | .ldecl _ fvarId userName type val _ _ => do
-        let userName := userName.simpMacroScopes
+        let userName := userName.eraseMacroScopes
         let type ← instantiate type
         let value? ← if showLetValues then
           let val ← instantiate val
@@ -493,8 +493,8 @@ def serializeGoal (options: @&Protocol.Options) (goal: MVarId) (mvarDecl: Metava
         else
           pure $ .none
         return {
-          name := fvarId.name.toString,
-          userName:= ofName userName,
+          name := fvarId.name,
+          userName:= userName.eraseMacroScopes,
           isInaccessible := userName.isInaccessibleUserName
           type? := .some (← serializeExpression options type)
           value? := value?
@@ -512,14 +512,15 @@ def serializeGoal (options: @&Protocol.Options) (goal: MVarId) (mvarDecl: Metava
           | false => ppVar localDecl
         return var::acc
     return {
-      name := goal.name.toString,
-      userName? := if mvarDecl.userName == .anonymous then .none else .some (ofName mvarDecl.userName),
+      name := goal.name,
+      userName? := match mvarDecl.userName with
+        | .anonymous =>  .none
+        | name => .some name.eraseMacroScopes,
       target := (← serializeExpression options (← instantiate mvarDecl.type)),
       vars := vars.reverse.toArray
     }
   where
   instantiate := instantiateAll
-  ofName (n: Name) := serializeName n (sanitize := false)
 
 protected def GoalState.serializeGoals
       (state: GoalState)

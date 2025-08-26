@@ -10,6 +10,7 @@ import Lean.Message
 
 namespace Pantograph.Protocol
 
+open Lean (Json ToJson FromJson Position Name)
 
 /-- Main Option structure, placed here to avoid name collision -/
 structure Options where
@@ -33,7 +34,7 @@ structure Options where
   automaticMode: Bool := true
   -- Timeout for tactics and operations that could potentially execute a tactic
   timeout: Nat := 0
-  deriving Lean.ToJson
+  deriving ToJson
 
 abbrev OptionsT := ReaderT Options
 
@@ -48,119 +49,119 @@ structure OptionsSet where
   printImplementationDetailHyps?: Option Bool := .none
   automaticMode?: Option Bool := .none
   timeout?: Option Nat := .none
-  deriving Lean.FromJson
+  deriving FromJson
 structure OptionsSetResult where
-  deriving Lean.ToJson
+  deriving ToJson
 structure OptionsPrint where
-  deriving Lean.FromJson
+  deriving FromJson
 
 --- Expression Objects ---
 
 structure BoundExpression where
   binders: Array (String × String)
   target: String
-  deriving Lean.ToJson
+  deriving ToJson
 structure Expression where
   -- Pretty printed expression
   pp?: Option String             := .none
   -- AST structure
   sexp?: Option String           := .none
-  dependentMVars?: Option (Array String) := .none
-  deriving Lean.ToJson
+  dependentMVars?: Option (Array Name) := .none
+  deriving ToJson
 
 structure Variable where
   /-- The internal name used in raw expressions -/
-  name: String := ""
+  name: Name := .anonymous
   /-- The name displayed to the user -/
-  userName: String
+  userName: Name
   /-- Does the name contain a dagger -/
   isInaccessible: Bool := false
   type?: Option Expression  := .none
   value?: Option Expression := .none
-  deriving Lean.ToJson
+  deriving ToJson
 inductive Fragment where
   | tactic
   | conv
   | calc
-  deriving BEq, DecidableEq, Repr, Lean.ToJson
+  deriving BEq, DecidableEq, Repr, ToJson
 structure Goal where
   /-- Name of the metavariable -/
-  name : String := ""
+  name : Name := .anonymous
   /-- User-facing name -/
-  userName? : Option String  := .none
+  userName? : Option Name := .none
   fragment : Fragment := .tactic
   /-- target expression type -/
   target : Expression
   /-- Variables -/
-  vars : Array Variable      := #[]
-  deriving Lean.ToJson
+  vars : Array Variable := #[]
+  deriving ToJson
 
 --- Individual Commands and return types ---
 
 structure Command where
   cmd: String
-  payload: Lean.Json
-  deriving Lean.FromJson
+  payload: Json
+  deriving FromJson
 
 structure InteractionError where
   error: String
   desc: String
-  deriving Lean.ToJson
+  deriving ToJson
 
-def errorIndex (desc: String): InteractionError := { error := "index", desc }
-def errorOperation (desc: String): InteractionError := { error := "operation", desc }
-def errorExpr (desc: String): InteractionError := { error := "expr", desc }
+def errorIndex (desc : String) : InteractionError := { error := "index", desc }
+def errorOperation (desc : String) : InteractionError := { error := "operation", desc }
+def errorExpr (desc : String) : InteractionError := { error := "expr", desc }
 
 
 structure Reset where
-  deriving Lean.FromJson
+  deriving FromJson
 structure Stat where
-  deriving Lean.FromJson
+  deriving FromJson
 structure StatResult where
   -- Number of goals states
   nGoals: Nat
-  deriving Lean.ToJson
+  deriving ToJson
 
 -- Return the type of an expression
 structure ExprEcho where
   expr: String
   type?: Option String := .none
   -- universe levels
-  levels?: Option (Array String) := .none
-  deriving Lean.FromJson
+  levels?: Option (Array Name) := .none
+  deriving FromJson
 structure ExprEchoResult where
   expr: Expression
   type: Expression
-  deriving Lean.ToJson
+  deriving ToJson
 
 -- Describe the current state of the environment
 structure EnvDescribe where
   deriving Lean.FromJson
 structure EnvDescribeResult where
-  imports : Array String
-  modules : Array String
-  deriving Lean.ToJson
+  imports : Array Name
+  modules : Array Name
+  deriving ToJson
 
 -- Describe a module
 structure EnvModuleRead where
-  module : String
-  deriving Lean.FromJson
+  module : Name
+  deriving FromJson
 structure EnvModuleReadResult where
-  imports: Array String
-  constNames: Array String
-  extraConstNames: Array String
-  deriving Lean.ToJson
+  imports: Array Name
+  constNames: Array Name
+  extraConstNames: Array Name
+  deriving ToJson
 
 -- Print all symbols in environment
 structure EnvCatalog where
-  deriving Lean.FromJson
+  deriving FromJson
 structure EnvCatalogResult where
   symbols: Array String
-  deriving Lean.ToJson
+  deriving ToJson
 
 -- Print the type of a symbol
 structure EnvInspect where
-  name: String
+  name: Name
   -- Show the value expressions; By default definitions values are shown and
   -- theorem values are hidden.
   value?: Option Bool := .some false
@@ -168,96 +169,96 @@ structure EnvInspect where
   dependency?: Option Bool := .some false
   -- Show source location
   source?: Option Bool := .some false
-  deriving Lean.FromJson
+  deriving FromJson
 -- See `InductiveVal`
 structure InductInfo where
   numParams: Nat
   numIndices: Nat
-  all: Array String
-  ctors: Array String
+  all: Array Name
+  ctors: Array Name
   isRec:       Bool := false
   isReflexive: Bool := false
   isNested:    Bool := false
-  deriving Lean.ToJson
+  deriving ToJson
 -- See `ConstructorVal`
 structure ConstructorInfo where
-  induct: String
+  induct: Name
   cidx: Nat
   numParams: Nat
   numFields: Nat
-  deriving Lean.ToJson
+  deriving ToJson
 
 /-- See `Lean/Declaration.lean` -/
 structure RecursorRule where
-  ctor: String
+  ctor: Name
   nFields: Nat
   rhs: Expression
-  deriving Lean.ToJson
+  deriving ToJson
 structure RecursorInfo where
-  all: Array String
+  all: Array Name
   numParams: Nat
   numIndices: Nat
   numMotives: Nat
   numMinors: Nat
   rules: Array RecursorRule
   k: Bool
-  deriving Lean.ToJson
+  deriving ToJson
 structure EnvInspectResult where
   type: Expression
   isUnsafe: Bool            := false
   value?: Option Expression := .none
-  module?: Option String    := .none
+  module?: Option Name      := .none
   -- If the name is private, displays the public facing name
-  publicName?: Option String := .none
-  typeDependency?: Option (Array String) := .none
-  valueDependency?: Option (Array String) := .none
+  publicName?: Option Name  := .none
+  typeDependency?: Option (Array Name) := .none
+  valueDependency?: Option (Array Name) := .none
   inductInfo?:      Option InductInfo      := .none
   constructorInfo?: Option ConstructorInfo := .none
   recursorInfo?:    Option RecursorInfo    := .none
 
   -- Location in source
   sourceUri?: Option String := .none
-  sourceStart?: Option Lean.Position := .none
-  sourceEnd?: Option Lean.Position := .none
-  deriving Lean.ToJson
+  sourceStart?: Option Position := .none
+  sourceEnd?: Option Position := .none
+  deriving ToJson
 
 structure EnvAdd where
-  name: String
-  levels?: Option (Array String) := .none
+  name: Name
+  levels?: Option (Array Name) := .none
   type?: Option String := .none
   value: String
   isTheorem: Bool := false
-  deriving Lean.FromJson
+  deriving FromJson
 structure EnvAddResult where
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure EnvSaveLoad where
   path: System.FilePath
-  deriving Lean.FromJson
+  deriving FromJson
 structure EnvSaveLoadResult where
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure EnvParse where
   input : String
-  category : String
-  deriving Lean.FromJson
+  category : Name
+  deriving FromJson
 structure EnvParseResult where
   -- Byte boundary for the first syntax element
   pos : Nat
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure GoalStart where
   -- Only one of the fields below may be populated.
   expr: Option String     -- Directly parse in an expression
   -- universe levels
-  levels?: Option (Array String) := .none
-  copyFrom: Option String := .none -- Copy the type from a theorem in the environment
-  deriving Lean.FromJson
+  levels?: Option (Array Name) := .none
+  copyFrom: Option Name := .none -- Copy the type from a theorem in the environment
+  deriving FromJson
 structure GoalStartResult where
   stateId: Nat := 0
   -- Name of the root metavariable
-  root: String
-  deriving Lean.ToJson
+  root: Name
+  deriving ToJson
 structure GoalTactic where
   stateId: Nat
   -- If omitted, act on the first goal
@@ -276,9 +277,9 @@ structure GoalTactic where
 
   -- In case of the `have` and `let` tactics, the new free variable name is
   -- provided here
-  binderName?: Option String := .none
+  binderName?: Option Name := .none
 
-  deriving Lean.FromJson
+  deriving FromJson
 structure GoalTacticResult where
   -- The next goal state id. Existence of this field shows success
   nextStateId?: Option Nat          := .none
@@ -293,7 +294,7 @@ structure GoalTacticResult where
 
   hasSorry : Bool := false
   hasUnsafe : Bool := false
-  deriving Lean.ToJson
+  deriving ToJson
 structure GoalContinue where
   -- State from which the continuation acquires the context
   target: Nat
@@ -302,20 +303,20 @@ structure GoalContinue where
   -- The state which is an ancestor of `target` where goals will be extracted from
   branch?: Option Nat := .none
   -- Or, the particular goals that should be brought back into scope
-  goals?: Option (Array String) := .none
-  deriving Lean.FromJson
+  goals?: Option (Array Name) := .none
+  deriving FromJson
 structure GoalContinueResult where
   nextStateId: Nat
   goals: (Array Goal)
-  deriving Lean.ToJson
+  deriving ToJson
 
 -- Remove goal states
 structure GoalDelete where
   -- This is ok being a List because it doesn't show up in the ABI
   stateIds: List Nat
-  deriving Lean.FromJson
+  deriving FromJson
 structure GoalDeleteResult where
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure GoalPrint where
   stateId: Nat
@@ -327,8 +328,8 @@ structure GoalPrint where
   -- Print goals?
   goals?: Option Bool := .some False
   -- Print values of extra mvars?
-  extraMVars?: Option (Array String) := .none
-  deriving Lean.FromJson
+  extraMVars?: Option (Array Name) := .none
+  deriving FromJson
 structure GoalPrintResult where
   -- The root expression
   root?: Option Expression := .none
@@ -340,7 +341,7 @@ structure GoalPrintResult where
   rootHasSorry : Bool := false
   rootHasUnsafe : Bool := false
   rootHasMVar : Bool := true
-  deriving Lean.ToJson
+  deriving ToJson
 
 -- Diagnostic Options, not available in REPL
 structure GoalDiag where
@@ -355,15 +356,15 @@ structure GoalDiag where
 structure GoalSave where
   id: Nat
   path: System.FilePath
-  deriving Lean.FromJson
+  deriving FromJson
 structure GoalSaveResult where
-  deriving Lean.ToJson
+  deriving ToJson
 structure GoalLoad where
   path: System.FilePath
-  deriving Lean.FromJson
+  deriving FromJson
 structure GoalLoadResult where
   id: Nat
-  deriving Lean.ToJson
+  deriving ToJson
 
 /-- Executes the Lean compiler on a single file -/
 structure FrontendProcess where
@@ -378,15 +379,15 @@ structure FrontendProcess where
   invocations?: Option String := .none
   -- list new constants from each compilation step
   newConstants: Bool := false
-  deriving Lean.FromJson
+  deriving FromJson
 structure InvokedTactic where
   goalBefore: String
   goalAfter: String
   tactic: String
 
   -- List of used constants
-  usedConstants: Array String
-  deriving Lean.ToJson
+  usedConstants: Array Name
+  deriving ToJson
 
 structure CompilationUnit where
   -- String boundaries of compilation units
@@ -396,58 +397,56 @@ structure CompilationUnit where
   nInvocations?: Option Nat := .none
 
   -- New constants defined in compilation unit
-  newConstants?: Option (Array String) := .none
-  deriving Lean.ToJson
+  newConstants?: Option (Array Name) := .none
+  deriving ToJson
 structure FrontendProcessResult where
   units: List CompilationUnit
-  deriving Lean.ToJson
+  deriving ToJson
 
 /-- Frontend Process's side output going into a file -/
 structure FrontendDataUnit where
   invocations? : Option (List Protocol.InvokedTactic) := .none
-  deriving Lean.ToJson
+  deriving ToJson
 structure FrontendData where
   units : List FrontendDataUnit
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure FrontendDistil where
   file : String
   /-- If true, override default binder name which is generated from definition
   names -/
-  binderName? : Option String := .none
+  binderName? : Option Name := .none
   /-- If set to true, the values of search targets are discarded. Otherwise they
   will be incorporated into the generated goal state. -/
   ignoreValues : Bool := true
-  deriving Lean.FromJson
+  deriving FromJson
 structure FrontendDistilSearchTarget where
   stateId : Nat
   goals : Array Goal
-  deriving Lean.ToJson
+  deriving ToJson
 structure FrontendDistilResult where
   targets : List FrontendDistilSearchTarget
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure FrontendTrack where
   src : String
   dst : String
-  deriving Lean.FromJson
+  deriving FromJson
 structure FrontendTrackResult where
   failure? : Option String := .none
   srcMessages : Array Lean.SerialMessage := #[]
   dstMessages : Array Lean.SerialMessage := #[]
-  deriving Lean.ToJson
+  deriving ToJson
 
 structure FrontendRefactor where
   file : String
   coreOptions : Array String
-  deriving Lean.FromJson
+  deriving FromJson
 structure FrontendRefactorResult where
   file : String
-  deriving Lean.ToJson
+  deriving ToJson
 
 abbrev FallibleT := ExceptT InteractionError
 
 abbrev throw {m : Type v → Type w} [MonadExceptOf InteractionError m] {α : Type v} (e : InteractionError) : m α :=
   throwThe InteractionError e
-
-end Pantograph.Protocol

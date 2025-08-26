@@ -576,18 +576,6 @@ protected def GoalState.tryAssign (state : GoalState) (site : Site) (expr : Stri
     | .error error => return .parseError error
   state.tryTacticM site $ Tactic.evalAssign expr
 
-protected def GoalState.tryLet (state : GoalState) (site : Site) (binderName : String) (type : String)
-    : Elab.TermElabM TacticResult := do
-  state.restoreElabM
-  let type ← match Parser.runParserCategory
-    (env := ← MonadEnv.getEnv)
-    (catName := `term)
-    (input := type)
-    (fileName := ← getFileName) with
-    | .ok syn => pure syn
-    | .error error => return .parseError error
-  state.tryTacticM site $ Tactic.evalLet binderName.toName type
-
 /-- Enter conv tactic mode -/
 @[export pantograph_goal_state_conv_enter_m]
 protected def GoalState.convEnter (state : GoalState) (site : Site) :
