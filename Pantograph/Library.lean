@@ -109,7 +109,8 @@ def goalSerialize (state: GoalState) (options: @&Protocol.Options): CoreM (Array
   runMetaM <| state.serializeGoals options
 
 @[export pantograph_goal_print_m]
-def goalPrint (state: GoalState) (rootExpr: Bool) (parentExprs: Bool) (goals: Bool) (extraMVars : Array String) (options: @&Protocol.Options)
+def goalPrint (state: GoalState) (rootExpr: Bool) (parentExprs: Bool)
+  (goals: Bool) (extraMVars : Array Name) (options: @&Protocol.Options)
   : CoreM Protocol.GoalPrintResult := runMetaM do
   state.restoreMetaM
 
@@ -130,8 +131,8 @@ def goalPrint (state: GoalState) (rootExpr: Bool) (parentExprs: Bool) (goals: Bo
       goalSerialize state options
     else
       pure #[]
-  let extraMVars ← extraMVars.mapM λ mvarId => do
-    let mvarId: MVarId := { name := mvarId.toName }
+  let extraMVars ← extraMVars.mapM λ name => do
+    let mvarId: MVarId := ⟨name⟩
     let .some _ ← mvarId.findDecl? | return {}
     state.withContext mvarId do
       let .some expr ← getExprMVarAssignment? mvarId | return {}
@@ -148,19 +149,30 @@ def goalPrint (state: GoalState) (rootExpr: Bool) (parentExprs: Bool) (goals: Bo
   }
 
 @[export pantograph_goal_have_m]
-protected def GoalState.tryHave (state: GoalState) (site : Site) (binderName: String) (type: String): Elab.TermElabM TacticResult := do
+protected def GoalState.tryHave (state: GoalState) (site : Site) (binderName: Name) (type: String): Elab.TermElabM TacticResult := do
   let type ← match (← parseTermM type) with
     | .ok syn => pure syn
     | .error error => return .parseError error
   state.restoreElabM
-  state.tryTacticM site $ Tactic.evalHave binderName.toName type
+  state.tryTacticM site $ Tactic.evalHave binderName type
+protected def GoalState.tryLet (state : GoalState) (site : Site) (binderName : Name) (type : String)
+    : Elab.TermElabM TacticResult := do
+  state.restoreElabM
+  let type ← match Parser.runParserCategory
+    (env := ← MonadEnv.getEnv)
+    (catName := `term)
+    (input := type)
+    (fileName := ← getFileName) with
+    | .ok syn => pure syn
+    | .error error => return .parseError error
+  state.tryTacticM site $ Tactic.evalLet binderName type
 @[export pantograph_goal_try_define_m]
-protected def GoalState.tryDefine (state: GoalState) (site : Site) (binderName: String) (expr: String): Elab.TermElabM TacticResult := do
+protected def GoalState.tryDefine (state: GoalState) (site : Site) (binderName: Name) (expr: String): Elab.TermElabM TacticResult := do
   let expr ← match (← parseTermM expr) with
     | .ok syn => pure syn
     | .error error => return .parseError error
   state.restoreElabM
-  state.tryTacticM site $ Tactic.evalDefine binderName.toName expr
+  state.tryTacticM site $ Tactic.evalDefine binderName expr
 @[export pantograph_goal_try_draft_m]
 protected def GoalState.tryDraft (state: GoalState) (site : Site) (expr: String): Elab.TermElabM TacticResult := do
   let expr ← match (← parseTermM expr) with

@@ -113,7 +113,7 @@ def env_catalog (_ : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := 
 def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
   let env ← MonadEnv.getEnv
   let options := (← getMainState).options
-  let name :=  args.name.toName
+  let name :=  args.name
   let info? := env.find? name
   let .some info := info?
     | throw $ Protocol.errorIndex s!"Symbol not found {args.name}"
@@ -132,41 +132,41 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
     type := ← (serializeExpression options type).run',
     isUnsafe := info.isUnsafe,
     value? := ← value?.mapM (λ v => serializeExpression options v |>.run'),
-    publicName? := Lean.privateToUserName? name |>.map (·.toString),
+    publicName? := Lean.privateToUserName? name,
     typeDependency? := if args.dependency?.getD false
-      then .some <| type.getUsedConstants.map (λ n => serializeName n)
+      then .some <| type.getUsedConstants
       else .none,
     valueDependency? := if args.dependency?.getD false
       then value?.map λ e =>
-        e.getUsedConstants.filter (!isNameInternal ·) |>.map (λ n => serializeName n)
+        e.getUsedConstants.filter (!isNameInternal ·)
       else .none,
-    module? := module?.map (·.toString)
+    module?,
   }
   let result ← match info with
     | .inductInfo induct => pure { core with inductInfo? := .some {
           numParams := induct.numParams,
           numIndices := induct.numIndices,
-          all := induct.all.toArray.map (·.toString),
-          ctors := induct.ctors.toArray.map (·.toString),
+          all := induct.all.toArray,
+          ctors := induct.ctors.toArray,
           isRec := induct.isRec,
           isReflexive := induct.isReflexive,
           isNested := induct.isNested,
       } }
     | .ctorInfo ctor => pure { core with constructorInfo? := .some {
-          induct := ctor.induct.toString,
+          induct := ctor.induct,
           cidx := ctor.cidx,
           numParams := ctor.numParams,
           numFields := ctor.numFields,
       } }
     | .recInfo r => pure { core with recursorInfo? := .some {
-          all := r.all.toArray.map (·.toString),
+          all := r.all.toArray,
           numParams := r.numParams,
           numIndices := r.numIndices,
           numMotives := r.numMotives,
           numMinors := r.numMinors,
           rules := ← r.rules.toArray.mapM (λ rule => do
               pure {
-                ctor := rule.ctor.toString,
+                ctor := rule.ctor,
                 nFields := rule.nfields,
                 rhs := ← (serializeExpression options rule.rhs).run',
               })
@@ -193,25 +193,25 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
 def env_describe (_ : Protocol.EnvDescribe) : EMainM Protocol.EnvDescribeResult := runCoreM do
   let env ← Lean.MonadEnv.getEnv
   return {
-    imports := env.header.imports.map toString,
-    modules := env.header.moduleNames.map (·.toString),
+    imports := env.header.imports.map (·.module),
+    modules := env.header.moduleNames,
   }
 def env_module_read (args : Protocol.EnvModuleRead) : EMainM Protocol.EnvModuleReadResult := runCoreM do
   let env ← Lean.MonadEnv.getEnv
-  let .some i := env.header.moduleNames.findIdx? (· == args.module.toName) |
+  let .some i := env.header.moduleNames.findIdx? (· == args.module) |
     throwError s!"Module not found {args.module}"
   let data := env.header.moduleData[i]!
   return {
-    imports := data.imports.map toString,
-    constNames := data.constNames.map (·.toString),
-    extraConstNames := data.extraConstNames.map (·.toString),
+    imports := data.imports.map (·.module),
+    constNames := data.constNames,
+    extraConstNames := data.extraConstNames,
   }
 /-- Elaborates and adds a declaration to the `CoreM` environment. -/
 def env_add (args : Protocol.EnvAdd) : EMainM Protocol.EnvAddResult := withInheritEnv <| runCoreM' do
   let { name, levels?, type?, value, isTheorem } := args
   let levels := levels?.getD #[]
   let env ← Lean.MonadEnv.getEnv
-  let levelParams := levels.toList.map (·.toName)
+  let levelParams := levels.toList
   let tvM: Elab.TermElabM (Except String (Expr × Expr)) :=
     Elab.Term.withLevelNames levelParams do do
     let expectedType?? : Except String (Option Expr) ← ExceptT.run $ type?.mapM λ type => do
@@ -240,14 +240,14 @@ def env_add (args : Protocol.EnvAdd) : EMainM Protocol.EnvAddResult := withInher
     | .error e => Protocol.throw $ Protocol.errorExpr e
   let decl := if isTheorem then
     Lean.Declaration.thmDecl <| Lean.mkTheoremValEx
-      (name := name.toName)
+      (name := name)
       (levelParams := levelParams)
       (type := type)
       (value := value)
       (all := [])
   else
     Lean.Declaration.defnDecl <| Lean.mkDefinitionValEx
-      (name := name.toName)
+      (name := name)
       (levelParams := levelParams)
       (type := type)
       (value := value)
@@ -296,10 +296,10 @@ def goal_tactic (args : Protocol.GoalTactic) : EMainM Protocol.GoalTacticResult 
     | .none, .none, .some expr, .none, .none, .none => do
       pure $ Except.ok $ ← goalState.tryAssign site expr
     | .none, .none, .none, .some type, .none, .none => do
-      let binderName := args.binderName?.getD ""
+      let binderName := args.binderName?.getD .anonymous
       pure $ Except.ok $ ← goalState.tryHave site binderName type
     | .none, .none, .none, .none, .some type, .none => do
-      let binderName := args.binderName?.getD ""
+      let binderName := args.binderName?.getD .anonymous
       pure $ Except.ok $ ← goalState.tryLet site binderName type
     | .none, .none, .none, .none, .none, .some draft => do
       pure $ Except.ok $ ← goalState.tryDraft site draft
@@ -341,7 +341,7 @@ section Frontend
 
 def frontend_distil (args : Protocol.FrontendDistil) : EMainM Protocol.FrontendDistilResult := do
   let config := {
-    binderName? := args.binderName?.map (·.toName),
+    binderName? := args.binderName?,
     ignoreValues := args.ignoreValues,
   }
   let targets ← Frontend.distilSearchTargets (← getEnv) args.file config
@@ -408,7 +408,7 @@ def frontend_process (args : Protocol.FrontendProcess) : EMainM Protocol.Fronten
     IO.FS.writeFile fileName (toJson data |>.compress)
   let units ← li.mapM λ step => withEnv step.env do
     let newConstants? := if args.newConstants then
-        .some $ step.newConstants.toArray.map λ name => name.toString
+        .some $ step.newConstants.toArray
       else
         .none
     let nInvocations? := if args.invocations?.isSome then .some step.invocations.length else .none
@@ -511,21 +511,21 @@ def execute (command : Protocol.Command) : MainM Json := do
     return {}
   expr_echo (args: Protocol.ExprEcho): EMainM Protocol.ExprEchoResult := do
     let state ← getMainState
-    let levelNames := (args.levels?.getD #[]).toList.map (·.toName)
+    let levelNames := (args.levels?.getD #[]).toList
     liftExcept $ ← liftTermElabM (levelNames := levelNames) do
       (exprEcho args.expr (expectedType? := args.type?) (options := state.options)).run
   env_parse (args : Protocol.EnvParse) : EMainM Protocol.EnvParseResult := do
-    let category := args.category.toName
+    let category := args.category
     match runParserCategory' (← getEnv) category args.input with
     | .ok (_, p) => return { pos := p.byteIdx }
     | .error desc => throw { error := "parse", desc }
   goal_start (args: Protocol.GoalStart): EMainM Protocol.GoalStartResult := do
-    let levelNames := (args.levels?.getD #[]).toList.map (·.toName)
+    let levelNames := (args.levels?.getD #[]).toList
     let expr?: Except _ GoalState ← liftTermElabM (levelNames := levelNames) do
       match args.expr, args.copyFrom with
       | .some expr, .none => goalStartExpr expr |>.run
       | .none, .some copyFrom => do
-        (match (← getEnv).find? <| copyFrom.toName with
+        (match (← getEnv).find? copyFrom with
         | .none => return .error <| Protocol.errorIndex s!"Symbol not found: {copyFrom}"
         | .some cInfo => return .ok (← GoalState.create cInfo.type))
       | _, _ =>
@@ -545,7 +545,7 @@ def execute (command : Protocol.Command) : MainM Json := do
         | .none => Protocol.throw $ Protocol.errorIndex s!"Invalid state index {branchId}"
         | .some branch => pure $ target.continue branch
       | .none, .some goals =>
-        let goals := goals.toList.map (λ n => { name := n.toName })
+        let goals := goals.toList.map (⟨·⟩)
         pure $ target.resume goals
       | _, _ => Protocol.throw $ errorI "arguments" "Exactly one of {branch, goals} must be supplied"
     match nextGoalState? with
