@@ -92,7 +92,7 @@ def test_tactic : Test := do
     ],
   }
   step "goal.start" ({ expr := "∀ (p q: Prop), p ∨ q → q ∨ p" }: Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.9" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.9".toName }: Protocol.GoalStartResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro x" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.print" ({ stateId := 1, parentExprs? := .some true, rootExpr? := .some true }: Protocol.GoalPrint)
@@ -117,7 +117,7 @@ example : (1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3 := by
   simp
 def test_tactic_timeout : Test := do
   step "goal.start" ({ expr := "(1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3" }: Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.365" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.365".toName }: Protocol.GoalStartResult)
   -- timeout of 10 milliseconds
   step "options.set" ({ timeout? := .some 10 } : Protocol.OptionsSet)
    ({ }: Protocol.OptionsSetResult)
@@ -169,7 +169,7 @@ def test_automatic_mode (automatic: Bool): Test := do
   step "options.set" ({automaticMode? := .some automatic}: Protocol.OptionsSet)
    ({}: Protocol.OptionsSetResult)
   step "goal.start" ({ expr := "∀ (p q: Prop), p ∨ q → q ∨ p"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.9" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.9".toName }: Protocol.GoalStartResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro p q h" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.tactic" ({ stateId := 1, tactic? := .some "cases h" }: Protocol.GoalTactic)
@@ -182,7 +182,7 @@ def test_conv_calc : Test := do
   step "options.set" ({automaticMode? := .some false}: Protocol.OptionsSet)
    ({}: Protocol.OptionsSetResult)
   step "goal.start" ({ expr := "∀ (a b: Nat), (b = 2) -> 1 + a + 1 = a + b"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.167" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.167".toName }: Protocol.GoalStartResult)
   let vars := #[
     { name := "_uniq.168".toName, userName := `a, type? := .some { pp? := .some "Nat" }},
     { name := "_uniq.171".toName, userName := `b, type? := .some { pp? := .some "Nat" }},
@@ -321,13 +321,13 @@ def test_frontend_process_import_open : Test := do
      ],
    }: Protocol.FrontendProcessResult)
   step "goal.start" ({ expr := "∀ (n : Nat), n + 1 = Nat.succ n"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.77" }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.77".toName }: Protocol.GoalStartResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro n" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.tactic" ({ stateId := 1, tactic? := .some "apply add_one" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 2, goals? := .some #[], }: Protocol.GoalTacticResult)
   step "goal.start" ({ expr := "∀ (x : Sort u), Sort (u + 1)"} : Protocol.GoalStart)
-   ({ stateId := 3, root := "_uniq.5" }: Protocol.GoalStartResult)
+   ({ stateId := 3, root := "_uniq.5".toName }: Protocol.GoalStartResult)
 
 def test_frontend_track : Test := do
   step "frontend.track"

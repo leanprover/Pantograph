@@ -523,7 +523,7 @@ def execute (command : Protocol.Command) : MainM Json := do
     | .error error => Protocol.throw error
     | .ok goalState =>
       let stateId ← newGoalState goalState
-      return { stateId, root := goalState.root.name.toString }
+      return { stateId, root := goalState.root.name }
   goal_continue (args: Protocol.GoalContinue): EMainM Protocol.GoalContinueResult := do
     let state ← getMainState
     let .some target := state.goalStates[args.target]? |
