@@ -1,5 +1,5 @@
-import Std.Data.HashMap
 import Pantograph
+import Std.Data.HashMap
 
 namespace Pantograph.Repl
 
@@ -144,33 +144,22 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
   }
   let result ← match info with
     | .inductInfo induct => pure { core with inductInfo? := .some {
-          numParams := induct.numParams,
-          numIndices := induct.numIndices,
+          induct with
           all := induct.all.toArray,
           ctors := induct.ctors.toArray,
-          isRec := induct.isRec,
-          isReflexive := induct.isReflexive,
-          isNested := induct.isNested,
       } }
     | .ctorInfo ctor => pure { core with constructorInfo? := .some {
-          induct := ctor.induct,
-          cidx := ctor.cidx,
-          numParams := ctor.numParams,
-          numFields := ctor.numFields,
+          ctor with
       } }
     | .recInfo r => pure { core with recursorInfo? := .some {
+          r with
           all := r.all.toArray,
-          numParams := r.numParams,
-          numIndices := r.numIndices,
-          numMotives := r.numMotives,
-          numMinors := r.numMinors,
           rules := ← r.rules.toArray.mapM (λ rule => do
               pure {
                 ctor := rule.ctor,
                 nFields := rule.nfields,
                 rhs := ← (serializeExpression options rule.rhs).run',
               })
-          k := r.k,
       } }
     | _ => pure core
   let result ← if args.source?.getD false then
