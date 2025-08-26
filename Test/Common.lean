@@ -25,13 +25,13 @@ def Goal.devolatilizeVars (goal: Goal): Goal :=
   where removeInternalAux (v: Variable): Variable :=
     {
       v with
-      name := ""
+      name := .anonymous
     }
 /-- Set internal names to "" -/
 def Goal.devolatilize (goal: Goal): Goal :=
   {
     goal.devolatilizeVars with
-    name := "",
+    name := .anonymous,
   }
 
 deriving instance DecidableEq, Repr for Name
@@ -177,10 +177,10 @@ def transformTestT { α } { μ μ' : Type → Type }
   set tests
   return a
 
-def cdeclOf (userName: Name) (type: Expr): Condensed.LocalDecl :=
+def cdeclOf (userName : Name) (type : Expr) : Condensed.LocalDecl :=
   { userName, type }
 
-def buildGoal (nameType: List (String × String)) (target: String) (userName?: Option String := .none):
+def buildGoal (nameType : List (Name × String)) (target : String) (userName?: Option Name := .none):
     Protocol.Goal :=
   {
     userName?,

@@ -46,7 +46,8 @@ def startProof (expr: String): TestM (Option GoalState) := do
       let goal ← GoalState.create (expr := expr)
       return Option.some goal
 
-def buildGoal (nameType: List (String × String)) (target: String) (userName?: Option String := .none): Protocol.Goal :=
+def buildGoal (nameType : List (Name × String)) (target : String)
+  (userName? : Option Name := .none) : Protocol.Goal :=
   {
     userName?,
     target := { pp? := .some target},
@@ -114,11 +115,11 @@ def test_m_couple_simp: TestM Unit := do
       addTest $ assertUnreachable $ other.toString
       return ()
   let serializedState1 ← state1.serializeGoals (options := { ← read with printDependentMVars := true })
-  addTest $ LSpec.check "apply Nat.le_trans" (serializedState1.map (·.target.pp?) =
-    #[.some "2 ≤ ?m", .some "?m ≤ 5", .some "Nat"])
+  checkEq "apply Nat.le_trans" (serializedState1.map (·.target.pp?))
+    #[.some "2 ≤ ?m", .some "?m ≤ 5", .some "Nat"]
   let n := state1.goals[2]!
-  addTest $ LSpec.check "(metavariables)" (serializedState1.map (·.target.dependentMVars?.get!) =
-    #[#[toString n.name], #[toString n.name], #[]])
+  checkEq "(metavariables)" (serializedState1.map (·.target.dependentMVars?.get!))
+    #[#[n.name], #[n.name], #[]]
 
   let state2 ← match ← state1.tacticOn (goalId := 2) (tactic := "exact 2") with
     | .success state _ => pure state
@@ -176,11 +177,11 @@ def test_proposition_generation: TestM Unit := do
     | other => do
       addTest $ assertUnreachable $ other.toString
       return ()
-  addTest $ LSpec.check "apply PSigma.mk" ((← state1.serializeGoals (options := ← read)).map (·.devolatilize) =
+  checkEq "apply PSigma.mk" ((← state1.serializeGoals (options := ← read)).map (·.devolatilize))
     #[
-      buildGoal [] "?fst" (userName? := .some "snd"),
-      buildGoal [] "Prop" (userName? := .some "fst")
-      ])
+      buildGoal [] "?fst" (userName? := `snd),
+      buildGoal [] "Prop" (userName? := `fst)
+    ]
   if let #[goal1, goal2] := ← state1.serializeGoals (options := { (← read) with printExprAST := true }) then
     addTest $ LSpec.test "(1 reference)" (goal1.target.sexp? = .some s!"(:mv {goal2.name})")
   checkTrue "(1 root)" $ ¬ state1.isSolved
