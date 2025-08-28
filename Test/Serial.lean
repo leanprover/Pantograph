@@ -104,7 +104,7 @@ def test_pickling_synthetic_mvars : TestM Unit := do
   let stateGenerate : MetaM GoalState := runTermElabMInMeta do
     let type ← Elab.Term.elabTerm (← `(term|(0 : Nat) < 1)) .none
     let state ← GoalState.create type
-    let .success state _ ← state.tryHave .unfocus "h" "0 < 2" | unreachable!
+    let .success state _ ← state.tryHave .unfocus `h "0 < 2" | unreachable!
     assert! state.savedState.term.elab.syntheticMVars.size > 0
     return state
 

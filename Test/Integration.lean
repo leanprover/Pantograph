@@ -48,7 +48,7 @@ def stepFile { α } [Lean.ToJson α] (name : String) (path : String)
 
 def test_expr_echo : Test :=
   step "expr.echo"
-   ({ expr := "λ {α : Sort (u + 1)} => List α", levels? := .some #["u"]}: Protocol.ExprEcho)
+   ({ expr := "λ {α : Sort (u + 1)} => List α", levels? := .some #[`u]}: Protocol.ExprEcho)
    ({
      type := { pp? := .some "{α : Type u} → Type u" },
      expr := { pp? := .some "fun {α} => List α" }
@@ -57,38 +57,38 @@ def test_expr_echo : Test :=
 def test_option_modify : Test := do
   let pp? := Option.some "∀ (n : Nat), n + 1 = n.succ"
   let sexp? := Option.some "(:forall n (:c Nat) ((:c Eq) (:c Nat) ((:c HAdd.hAdd) (:c Nat) (:c Nat) (:c Nat) ((:c instHAdd) (:c Nat) (:c instAddNat)) 0 ((:c OfNat.ofNat) (:c Nat) (:lit 1) ((:c instOfNatNat) (:lit 1)))) ((:c Nat.succ) 0)))"
-  let module? := Option.some "Init.Data.Nat.Basic"
+  let module? := Option.some `Init.Data.Nat.Basic
   let options: Protocol.Options := {}
-  step "env.inspect" ({ name := "Nat.add_one" } : Protocol.EnvInspect)
+  step "env.inspect" ({ name := `Nat.add_one } : Protocol.EnvInspect)
    ({ type := { pp? }, module? }: Protocol.EnvInspectResult)
   step "options.set" ({ printExprAST? := .some true } : Protocol.OptionsSet)
    ({ }: Protocol.OptionsSetResult)
-  step "env.inspect" ({ name := "Nat.add_one" } : Protocol.EnvInspect)
+  step "env.inspect" ({ name := `Nat.add_one } : Protocol.EnvInspect)
    ({ type := { pp?, sexp? }, module? }: Protocol.EnvInspectResult)
   step "options.print" ({} : Protocol.OptionsPrint)
    ({ options with printExprAST := true }: Protocol.Options)
 
 def test_malformed_command : Test := do
   let invalid := "invalid"
-  step invalid ({ name := "Nat.add_one" }: Protocol.EnvInspect)
+  step invalid ({ name := `Nat.add_one }: Protocol.EnvInspect)
    ({ error := "command", desc := s!"Unknown command {invalid}" }: Protocol.InteractionError)
    (name? := .some "Invalid Command")
   step "expr.echo" (Lean.Json.mkObj [(invalid, .str "Random garbage data")])
    ({ error := "command", desc := s!"Unable to parse json: Pantograph.Protocol.ExprEcho.expr: String expected" }:
     Protocol.InteractionError) (name? := .some "JSON Deserialization")
 def test_tactic : Test := do
-  let varX := { name := "_uniq.10", userName := "x", type? := .some { pp? := .some "Prop" }}
+  let varX := { name := "_uniq.10".toName, userName := `x, type? := .some { pp? := .some "Prop" }}
   let goal1: Protocol.Goal := {
-    name := "_uniq.11",
+    name := "_uniq.11".toName,
     target := { pp? := .some "∀ (q : Prop), x ∨ q → q ∨ x" },
     vars := #[varX],
   }
   let goal2: Protocol.Goal := {
-    name := "_uniq.14",
+    name := "_uniq.14".toName,
     target := { pp? := .some "x ∨ y → y ∨ x" },
     vars := #[
       varX,
-      { name := "_uniq.13", userName := "y", type? := .some { pp? := .some "Prop" }}
+      { name := "_uniq.13".toName, userName := `y, type? := .some { pp? := .some "Prop" }}
     ],
   }
   step "goal.start" ({ expr := "∀ (p q: Prop), p ∨ q → q ∨ p" }: Protocol.GoalStart)
@@ -131,38 +131,39 @@ def test_tactic_timeout : Test := do
 
 def test_automatic_mode (automatic: Bool): Test := do
   let varsPQ := #[
-    { name := "_uniq.10", userName := "p", type? := .some { pp? := .some "Prop" }},
-    { name := "_uniq.13", userName := "q", type? := .some { pp? := .some "Prop" }}
+    { name := "_uniq.10".toName, userName := `p, type? := .some { pp? := .some "Prop" }},
+    { name := "_uniq.13".toName, userName := `q, type? := .some { pp? := .some "Prop" }}
   ]
+  let h' := .mkSimple "h✝"
   let goal1: Protocol.Goal := {
-    name := "_uniq.17",
+    name := "_uniq.17".toName,
     target := { pp? := .some "q ∨ p" },
     vars := varsPQ ++ #[
-      { name := "_uniq.16", userName := "h", type? := .some { pp? := .some "p ∨ q" }}
+      { name := "_uniq.16".toName, userName := `h, type? := .some { pp? := .some "p ∨ q" }}
     ],
   }
   let goal2l: Protocol.Goal := {
-    name := "_uniq.61",
-    userName? := .some "inl",
+    name := "_uniq.61".toName,
+    userName? := `inl,
     target := { pp? := .some "q ∨ p" },
     vars := varsPQ ++ #[
-      { name := "_uniq.49", userName := "h✝", type? := .some { pp? := .some "p" }, isInaccessible := true}
+      { name := "_uniq.49".toName, userName := h', type? := .some { pp? := .some "p" }, isInaccessible := true}
     ],
   }
   let goal2r: Protocol.Goal := {
-    name := "_uniq.74",
-    userName? := .some "inr",
+    name := "_uniq.74".toName,
+    userName? := `inr,
     target := { pp? := .some "q ∨ p" },
     vars := varsPQ ++ #[
-      { name := "_uniq.62", userName := "h✝", type? := .some { pp? := .some "q" }, isInaccessible := true}
+      { name := "_uniq.62".toName, userName := h', type? := .some { pp? := .some "q" }, isInaccessible := true}
     ],
   }
   let goal3l: Protocol.Goal := {
-    name := "_uniq.80",
-    userName? := .some "inl.h",
+    name := "_uniq.80".toName,
+    userName? := `inl.h,
     target := { pp? := .some "p" },
     vars := varsPQ ++ #[
-      { name := "_uniq.49", userName := "h✝", type? := .some { pp? := .some "p" }, isInaccessible := true}
+      { name := "_uniq.49".toName, userName := h', type? := .some { pp? := .some "p" }, isInaccessible := true}
     ],
   }
   step "options.set" ({automaticMode? := .some automatic}: Protocol.OptionsSet)
@@ -183,13 +184,13 @@ def test_conv_calc : Test := do
   step "goal.start" ({ expr := "∀ (a b: Nat), (b = 2) -> 1 + a + 1 = a + b"} : Protocol.GoalStart)
    ({ stateId := 0, root := "_uniq.171" }: Protocol.GoalStartResult)
   let vars := #[
-    { name := "_uniq.172", userName := "a", type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.175", userName := "b", type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.178", userName := "h", type? := .some { pp? := .some "b = 2" }},
+    { name := "_uniq.168".toName, userName := `a, type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.171".toName, userName := `b, type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.174".toName, userName := `h, type? := .some { pp? := .some "b = 2" }},
   ]
   let goal : Protocol.Goal := {
     vars,
-    name := "_uniq.179",
+    name := "_uniq.175".toName,
     target := { pp? := "1 + a + 1 = a + b" },
   }
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro a b h" }: Protocol.GoalTactic)
@@ -198,13 +199,13 @@ def test_conv_calc : Test := do
    ({ nextStateId? := .some 2, goals? := #[{ goal with fragment := .calc }], }: Protocol.GoalTacticResult)
   let goalCalc : Protocol.Goal := {
     vars,
-    name := "_uniq.381",
-    userName? := .some "calc",
+    name := "_uniq.372".toName,
+    userName? := .some `calc,
     target := { pp? := "1 + a + 1 = a + 1 + 1" },
   }
   let goalMain : Protocol.Goal := {
     vars,
-    name := "_uniq.400",
+    name := "_uniq.391".toName,
     fragment := .calc,
     target := { pp? := "a + 1 + 1 = a + b" },
   }
@@ -214,15 +215,15 @@ def test_conv_calc : Test := do
     goalCalc with
     fragment := .conv,
     userName? := .none,
-    name := "_uniq.468",
+    name := "_uniq.459".toName,
   }
   step "goal.tactic" ({ stateId := 3, mode? := .some "conv" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 4, goals? := #[goalConv], }: Protocol.GoalTacticResult)
 
 def test_env_add_inspect : Test := do
-  let name1 := "Pantograph.mystery"
-  let name2 := "Pantograph.mystery2"
-  let name3 := "Pantograph.mystery3"
+  let name1 := `Pantograph.mystery
+  let name2 := `Pantograph.mystery2
+  let name3 := `Pantograph.mystery3
   step "env.add"
     ({
       name := name1,
@@ -251,7 +252,7 @@ def test_env_add_inspect : Test := do
   step "env.add"
     ({
       name := name3,
-      levels? := .some #["u"]
+      levels? := .some #[`u],
       type? := "(α : Type u) → α → (α × α)",
       value := "λ (α : Type u) (x : α) => (x, x)",
       isTheorem := false
@@ -295,7 +296,7 @@ def test_frontend_process_invocations : Test := do
             goalBefore := goal1 ,
             goalAfter := "",
             tactic := "exact Or.inl h",
-            usedConstants := #["Or.inl"],
+            usedConstants := #[`Or.inl],
           },
         ]
     } ] }
@@ -303,9 +304,9 @@ def test_frontend_process_invocations : Test := do
 def test_frontend_process_import_open : Test := do
   let header := "import Init\nopen Nat\nuniverse u"
   let goal1: Protocol.Goal := {
-    name := "_uniq.81",
+    name := "_uniq.79".toName,
     target := { pp? := .some "n + 1 = n.succ" },
-    vars := #[{ name := "_uniq.80", userName := "n", type? := .some { pp? := .some "Nat" }}],
+    vars := #[{ name := "_uniq.78".toName, userName := `n, type? := .some { pp? := .some "Nat" }}],
   }
   step "frontend.process"
     ({
@@ -360,13 +361,13 @@ def test_frontend_track : Test := do
 def test_frontend_distil_simple : Test := do
   let file := "theorem mystery (p: Prop) : p → p := sorry"
   let goal1: Protocol.Goal := {
-    name := "_uniq.1",
+    name := "_uniq.1".toName,
     target := { pp? := .some "∀ (p : Prop), p → p" },
   }
   step "frontend.distil"
     ({
       file,
-      binderName? := "x",
+      binderName? := `x,
     }: Protocol.FrontendDistil)
    ({
      targets := [{
@@ -383,9 +384,9 @@ def test_frontend_distil_multiple : Test := do
   let withSorry := "theorem mystery (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.197",
+    name := "_uniq.195".toName,
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.196", userName := "p", type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.194".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.distil"
     ({
@@ -403,7 +404,7 @@ def test_frontend_distil_multiple : Test := do
 def test_frontend_distil_circular : Test := do
   let withSorry := "theorem mystery : 1 + 2 = 2 + 3 := sorry"
   let goal1: Protocol.Goal := {
-    name := "_uniq.1",
+    name := "_uniq.1".toName,
     target := { pp? := .some "1 + 2 = 2 + 3" },
     vars := #[],
   }

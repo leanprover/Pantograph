@@ -32,8 +32,9 @@ def startProof (start: Start): TestM (Option GoalState) := do
     let expr ← parseSentence expr
     return .some $ ← GoalState.create (expr := expr)
 
-private def buildNamedGoal (name: String) (nameType: List (String × String)) (target: String)
-    (userName?: Option String := .none): Protocol.Goal :=
+private def buildNamedGoal (name : Name) (nameType : List (Name × String)) (target : String)
+  (userName? : Option Name := .none)
+  : Protocol.Goal :=
   {
     name,
     userName?,
@@ -43,8 +44,9 @@ private def buildNamedGoal (name: String) (nameType: List (String × String)) (t
       type? := .some { pp? := .some x.snd },
     })).toArray
   }
-private def buildGoal (nameType: List (String × String)) (target: String) (userName?: Option String := .none):
-    Protocol.Goal :=
+private def buildGoal (nameType : List (Name × String)) (target : String)
+  (userName? : Option Name := .none)
+  : Protocol.Goal :=
   {
     userName?,
     target := { pp? := .some target},
@@ -73,7 +75,7 @@ def test_identity: TestM Unit := do
     | other => do
       fail other.toString
       return ()
-  let inner := "_uniq.11"
+  let inner := "_uniq.11".toName
   addTest $ LSpec.check "intro" ((← state1.serializeGoals (options := ← read)).map (·.name) =
     #[inner])
   let state1parent ← state1.withParentContext do
@@ -100,8 +102,8 @@ def test_nat_add_comm (manual: Bool): TestM Unit := do
     | other => do
       addTest $ assertUnreachable $ other.toString
       return ()
-  addTest $ LSpec.check "intro n m" ((← state1.serializeGoals (options := ← read)).map (·.devolatilize) =
-    #[buildGoal [("n", "Nat"), ("m", "Nat")] "n + m = m + n"])
+  checkEq "intro n m" ((← state1.serializeGoals (options := ← read)).map (·.devolatilize))
+    #[buildGoal [(`n, "Nat"), (`m, "Nat")] "n + m = m + n"]
 
   match ← state1.tacticOn 0 "assumption" with
   | .failure #[message] =>
@@ -191,19 +193,19 @@ def test_or_comm: TestM Unit := do
   let [state1g0] := state1.goals | fail "Should have 1 goal"
   let (fvP, fvQ, fvH) ← state1.withContext state1g0 do
     let lctx ← getLCtx
-    let #[fvP, fvQ, fvH] := lctx.getFVarIds.map (toString ·.name) |
-      panic! "Incorrect number of decls"
+    let #[fvP, fvQ, fvH] := lctx.getFVarIds.map (·.name)
+      | panic! "Incorrect number of decls"
     pure (fvP, fvQ, fvH)
-  addTest $ LSpec.check tactic ((← state1.serializeGoals (options := ← read)) =
+  checkEq tactic ((← state1.serializeGoals (options := ← read)))
     #[{
-      name := state1g0.name.toString,
+      name := state1g0.name,
       target := { pp? := .some "q ∨ p" },
       vars := #[
-        { name := fvP, userName := "p", type? := .some { pp? := .some "Prop" } },
-        { name := fvQ, userName := "q", type? := .some { pp? := .some "Prop" } },
-        { name := fvH, userName := "h", type? := .some { pp? := .some "p ∨ q" } }
+        { name := fvP, userName := `p, type? := .some { pp? := .some "Prop" } },
+        { name := fvQ, userName := `q, type? := .some { pp? := .some "Prop" } },
+        { name := fvH, userName := `h, type? := .some { pp? := .some "p ∨ q" } }
       ]
-    }])
+    }]
   checkTrue "(1 parent)" state1.hasUniqueParent
   checkTrue "(1 root)" $ ¬ state1.isSolved
 
@@ -216,13 +218,13 @@ def test_or_comm: TestM Unit := do
     | other => do
       addTest $ assertUnreachable $ other.toString
       return ()
-  addTest $ LSpec.check tactic ((← state2.serializeGoals (options := ← read)).map (·.devolatilize) =
-    #[branchGoal "inl" "p", branchGoal "inr" "q"])
+  checkEq tactic ((← state2.serializeGoals (options := ← read)).map (·.devolatilize))
+    #[branchGoal `inl "p", branchGoal `inr "q"]
   let [state2g0, state2g1] := state2.goals |
     fail s!"Should have 2 goals, but it has {state2.goals.length}"
-  let (caseL, caseR) := (state2g0.name.toString, state2g1.name.toString)
-  addTest $ LSpec.check tactic ((← state2.serializeGoals (options := ← read)).map (·.name) =
-    #[caseL, caseR])
+  let (caseL, caseR) := (state2g0.name, state2g1.name)
+  checkEq tactic ((← state2.serializeGoals (options := ← read)).map (·.name))
+    #[caseL, caseR]
   checkTrue "(2 parent exists)" state2.hasUniqueParent
   checkTrue "(2 root)" $ ¬ state2.isSolved
 
@@ -292,16 +294,16 @@ def test_or_comm: TestM Unit := do
 
   return ()
   where
-    typeProp: Protocol.Expression := { pp? := .some "Prop" }
-    branchGoal (caseName varName: String): Protocol.Goal := {
-      userName? := .some caseName,
-      target := { pp? := .some "q ∨ p" },
-      vars := #[
-        { userName := "p", type? := .some typeProp },
-        { userName := "q", type? := .some typeProp },
-        { userName := "h✝", type? := .some { pp? := .some varName }, isInaccessible := true }
-      ]
-    }
+  typeProp: Protocol.Expression := { pp? := .some "Prop" }
+  branchGoal (caseName : Name) (varName: String): Protocol.Goal := {
+    userName? := .some caseName,
+    target := { pp? := .some "q ∨ p" },
+    vars := #[
+      { userName := `p, type? := .some typeProp },
+      { userName := `q, type? := .some typeProp },
+      { userName := .mkSimple "h✝", type? := .some { pp? := .some varName }, isInaccessible := true }
+    ]
+  }
 
 def test_exact_messages : TestM Unit := do
   let rootExpr ← parseSentence "1 + 2 = 2 + 3"
@@ -381,7 +383,7 @@ def test_implicit_arg_target : TestM Unit := do
 def test_implicit_arg_sideline : TestM Unit := do
   let state ← GoalState.create (← Elab.Term.elabTerm (← `(term|1 + 1 = 2)) .none)
   Elab.Term.synthesizeSyntheticMVarsUsingDefault
-  let .success state _ ← state.tryHave .unfocus "z" "2 + 2 = 4" | fail "Tactic failed"
+  let .success state _ ← state.tryHave .unfocus `z "2 + 2 = 4" | fail "Tactic failed"
   checkEq "Goals" state.goals.length 2
   let .success state _ ← state.tryTactic .unfocus "rfl" | fail "rfl failed"
   let .success state _ ← state.tryTactic .unfocus "rfl" | fail "rfl failed"
@@ -404,7 +406,7 @@ def test_deconstruct : TestM Unit := do
       return ()
   checkEq tactic ((← state1.serializeGoals (options := ← read)).map (·.devolatilize))
     #[
-      buildGoal [("p", "Prop"), ("q", "Prop"), ("hp", "p"), ("hq", "q")] "q ∧ p"
+      buildGoal [(`p, "Prop"), (`q, "Prop"), (`hp, "p"), (`hq, "q")] "q ∧ p"
     ]
 
 def test_tactic_seq : TestM Unit := do

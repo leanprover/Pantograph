@@ -38,7 +38,7 @@ theorem plus_n_Sm_proved_formal_sketch : ∀ n m : Nat, n + (m + 1) = (n + m) + 
     {
       target := { pp? := "∀ (n m : Nat), n + (m + 1) = n + m + 1" },
       vars := #[{
-        userName := "h_nat_add_succ",
+        userName := `h_nat_add_succ,
         type? := .some { pp? := "∀ (n m : Nat), n = m" },
       }],
     }
@@ -56,10 +56,10 @@ example : ∀ (n m: Nat), n + m = m + n := by
     {
       target := { pp? := "n + m = m + n" },
       vars := #[{
-           userName := "n",
+           userName := `n,
            type? := .some { pp? := "Nat" },
         }, {
-           userName := "m",
+           userName := `m,
            type? := .some { pp? := "Nat" },
         }
       ],
@@ -87,48 +87,48 @@ example : ∀ (n m: Nat), n + m = m + n := by
     {
       target := { pp? := "0 + m = m" },
       vars := #[{
-        userName := "m",
+        userName := `m,
         type? := .some { pp? := "Nat" },
       }]
     },
     {
-      userName? := .some "zero",
+      userName? := `zero,
       target := { pp? := "0 + m = m + 0" },
       vars := #[{
-        userName := "m",
+        userName := `m,
         type? := .some { pp? := "Nat" },
       }, {
-        userName := "h1",
+        userName := `h1,
         type? := .some { pp? := "0 + m = m" },
       }]
     },
     {
       target := { pp? := "n + m = m" },
       vars := #[{
-        userName := "m",
+        userName := `m,
         type? := .some { pp? := "Nat" },
       }, {
-        userName := "n",
+        userName := `n,
         type? := .some { pp? := "Nat" },
       }, {
-        userName := "ih",
+        userName := `ih,
         type? := .some { pp? := "n + m = m + n" },
       }]
     },
     {
-      userName? := .some "succ",
+      userName? := `succ,
       target := { pp? := "n + 1 + m = m + (n + 1)" },
       vars := #[{
-        userName := "m",
+        userName := `m,
         type? := .some { pp? := "Nat" },
       }, {
-        userName := "n",
+        userName := `n,
         type? := .some { pp? := "Nat" },
       }, {
-        userName := "ih",
+        userName := `ih,
         type? := .some { pp? := "n + m = m + n" },
       },  {
-        userName := "h2",
+        userName := `h2,
         type? := .some { pp? := "n + m = m" },
       }]
     },
@@ -148,16 +148,16 @@ example : ∀ (y: Nat), ∃ (x: Nat), y + 1 = x := by
     {
       target := { pp? := "y + 1 = ?w" },
       vars := #[{
-           userName := "y",
+           userName := `y,
            type? := .some { pp? := "Nat" },
         }
       ],
     },
     {
-      userName? := .some "w",
+      userName? := .some `w,
       target := { pp? := "Nat" },
       vars := #[{
-           userName := "y",
+           userName := `y,
            type? := .some { pp? := "Nat" },
         }
       ],
@@ -214,7 +214,7 @@ example (n: Nat) : mystery n + 1 = n + 2 := sorry
     {
       target := { pp? := "mystery n + 1 = n + 2" },
       vars := #[{
-         userName := "n",
+         userName := `n,
          type? := .some { pp? := "Nat" },
       }],
     }
@@ -231,7 +231,7 @@ def mystery (k: Nat) : Nat := true
     {
       target := { pp? := "Nat" },
       vars := #[{
-         userName := "k",
+         userName := `k,
          type? := .some { pp? := "Nat" },
       }],
     }
@@ -269,10 +269,10 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
     #[{
       target := { pp? := "n + m = m + n" },
       vars := #[{
-           userName := "n",
+           userName := `n,
            type? := .some { pp? := "Nat" },
         }, {
-           userName := "m",
+           userName := `m,
            type? := .some { pp? := "Nat" },
         }
       ],
@@ -292,44 +292,45 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
   "
   let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input { ignoreValues := false }
     | fail "Incorrect number of search states"
+  let n' := .mkSimple "n✝"
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize)) #[
     {
       target := { pp? := "n + 1 + m = m + (n + 1)" },
       vars := #[
-        { var "n✝" "Nat" with isInaccessible := true },
-        var "m" "Nat",
-        var "n" "Nat",
-        var "ih" "n + m = m + n",
-        var "h2" "n + m = m",
+        { var n' "Nat" with isInaccessible := true },
+        var `m "Nat",
+        var `n "Nat",
+        var `ih "n + m = m + n",
+        { var `h2 "n + m = m" with value? := .some { pp? := "?m.11" }},
       ],
     },
     {
       target := { pp? := "n + m = m" },
       vars := #[
-        { var "n✝" "Nat" with isInaccessible := true },
-        var "m" "Nat",
-        var "n" "Nat",
-        var "ih" "n + m = m + n",
+        { var n' "Nat" with isInaccessible := true },
+        var `m "Nat",
+        var `n "Nat",
+        var `ih "n + m = m + n",
       ],
     },
     {
       target := { pp? := "0 + m = m + 0" },
       vars := #[
-        var "n" "Nat",
-        var "m" "Nat",
-        var "h1" "0 + m = m",
+        var `n "Nat",
+        var `m "Nat",
+        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.5" }},
       ],
     },
     {
       target := { pp? := "0 + m = m" },
       vars := #[
-        var "n" "Nat",
-        var "m" "Nat",
+        var `n "Nat",
+        var `m "Nat",
       ],
     },
   ]
   where
-  var (userName type : String) : Protocol.Variable := {
+  var (userName : Name) (type : String) : Protocol.Variable := {
     userName,
     type? := .some { pp? := type },
   }
@@ -347,11 +348,11 @@ def mystery (α : Type) [Inhabited α] : α := {placeholder}
       target := { pp? := .some "α" },
       vars := #[
         {
-          userName := "α",
+          userName := `α,
           type? := .some { pp? := .some "Type" }
         },
         {
-          userName := "inst✝",
+          userName := .mkSimple "inst✝",
           isInaccessible := true,
           type? := .some { pp? := .some "Inhabited α" }
         },
@@ -384,7 +385,7 @@ theorem property (n: Nat) : mystery n + 1 = n + 2 := sorry
     {
       target := { pp? := "mystery n + 1 = n + 2" },
       vars := #[{
-         userName := "n",
+         userName := `n,
          type? := .some { pp? := "Nat" },
       }],
     }
@@ -449,8 +450,8 @@ theorem mystery2 : f 2 = 4 := sorry
   checkEq "start" ((← state.serializeGoals {}).map (·.devolatilize))
     #[
       {
-        userName? := .some "f",
-        vars := #[{ userName := "x", type? := .some { pp? := .some "Nat" } }]
+        userName? := `f,
+        vars := #[{ userName := `x, type? := .some { pp? := .some "Nat" } }]
         target := { pp? := .some "Nat" },
       },
       {
