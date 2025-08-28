@@ -113,7 +113,6 @@ def errorIndex (desc: String): InteractionError := { error := "index", desc }
 def errorOperation (desc: String): InteractionError := { error := "operation", desc }
 def errorExpr (desc: String): InteractionError := { error := "expr", desc }
 
-
 structure Reset where
   deriving Lean.FromJson
 structure Stat where
@@ -137,7 +136,7 @@ structure ExprEchoResult where
 
 -- Describe the current state of the environment
 structure EnvDescribe where
-  deriving Lean.FromJson
+  deriving FromJson
 structure EnvDescribeResult where
   imports : Array String
   modules : Array String
@@ -312,17 +311,17 @@ structure GoalContinueResult where
   deriving Lean.ToJson
 structure GoalSubsume where
   stateId : Nat
-  goal : Lean.Name
+  goal : Name
   srcStateId? : Option Nat := .none
-  srcs : Array Lean.Name
-  deriving Lean.FromJson
-deriving instance Lean.ToJson for Subsumption
+  candidates : Array Name
+  deriving FromJson
+deriving instance ToJson for Subsumption
 /-- To reconstruct the state, remove `goal` from the `stateId` in the input -/
 structure GoalSubsumeResult where
-  stateId? : Option Nat := .none
-  subsumptor? : Option Lean.Name := .none
   result : Subsumption
-  deriving Lean.ToJson
+  stateId? : Option Nat := .none
+  subsumptor? : Option Name := .none
+  deriving ToJson
 
 -- Remove goal states
 structure GoalDelete where

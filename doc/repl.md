@@ -121,9 +121,11 @@ See `Pantograph/Protocol.lean` for a description of the parameters and return va
   Execute continuation/resumption
   - `{ "branch": <id> }`: Continue on branch state. The current state must have no goals.
   - `{ "goals": <names> }`: Resume the given goals
-* [Experimental ]`goal.subsume {"stateId": <id>, "goal": <name>, "srcs":
-  <names>, ["srcStateId": <id>]}`: determine if any goal in `srcs` subsumes
-  `goal`.
+* `goal.subsume {"stateId": <id>, "goal": <name>, "candidates":
+  <names>, ["srcStateId": <id>]}`: determine if any goal in `candidates` (coming
+  from either the provided state id or `srcStateId`) subsumes `goal`. It returns
+  the *subsumptor* (goal providing the solution) and a new state id if the
+  subsumption is not a cycle, in which case the *subsumend* `goal` is erased.
 * `goal.remove {"stateIds": [<id>]}"`: Drop the goal states specified in the list
 * `goal.print {"stateId": <id>}"`: Print a goal state
 * `goal.save { "id": <id>, "path": <fileName> }`, `goal.load { "path": <fileName> }`:

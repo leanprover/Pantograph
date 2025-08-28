@@ -566,11 +566,12 @@ def execute (command: Protocol.Command): MainM Json := do
         pure $ .some srcGoalState
       | .none => pure .none
     let goal := ⟨args.goal⟩
-    let hist := args.srcs.map (⟨·⟩)
-    let (result, nextGoalState?, subsumptor?) ← runCoreM do goalState.subsume goal hist srcGoalState?
+    let candidates := args.candidates.map (⟨·⟩)
+    let (result, nextGoalState?, subsumptor?) ← runCoreM do
+      goalState.subsume goal candidates srcGoalState?
     let stateId? ← nextGoalState?.mapM (newGoalState ·)
     let subsumptor? := subsumptor?.map (·.name)
-    return { stateId?, subsumptor?, result }
+    return { result, stateId?, subsumptor? }
   goal_delete (args: Protocol.GoalDelete): EMainM Protocol.GoalDeleteResult := do
     let state ← getMainState
     let goalStates := args.stateIds.foldl (λ map id => map.erase id) state.goalStates
