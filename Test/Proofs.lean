@@ -203,7 +203,7 @@ def test_or_comm: TestM Unit := do
       vars := #[
         { name := fvP, userName := `p, type? := .some { pp? := .some "Prop" } },
         { name := fvQ, userName := `q, type? := .some { pp? := .some "Prop" } },
-        { name := fvH, userName := `h, type? := .some { pp? := .some "p ∨ q" } }
+        { name := fvH, userName := `h, type? := .some { pp? := .some "p ∨ q" } },
       ]
     }]
   checkTrue "(1 parent)" state1.hasUniqueParent
@@ -301,7 +301,11 @@ def test_or_comm: TestM Unit := do
     vars := #[
       { userName := `p, type? := .some typeProp },
       { userName := `q, type? := .some typeProp },
-      { userName := .mkSimple "h✝", type? := .some { pp? := .some varName }, isInaccessible := true }
+      {
+        userName := .mkSimple "h✝",
+        type? := .some { pp? := .some varName },
+        isInaccessible := true,
+      },
     ]
   }
 
@@ -311,8 +315,7 @@ def test_exact_messages : TestM Unit := do
   let tactic := "exact?"
   let state1? ← state0.tacticOn (goalId := 0) (tactic := tactic)
   let .failure messages := state1? | fail "Must fail"
-  checkEq "messages"
-    (← messages.mapM (·.toString))
+  checkEq "messages" (← messages.mapM (·.toString))
     #[s!"{← getFileName}:0:0: error: `exact?` could not close the goal. Try `apply?` to see partial suggestions.\n"]
 
 
