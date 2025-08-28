@@ -440,10 +440,12 @@ will assume the goals are not in the same mctx. This will disable subsumption in
 the case where `src` has mvars. -/
 def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
   : MetaM Subsumption := do
+  if (← withSrcContext do (Meta.inferType $ ← src.getType)) != .sort 0 then
+    return .none
   -- Find necessary `FVarIds`
   let dstFVarIds := (← goal.getDecl).lctx.foldr (init := [])
     λ decl acc => decl.fvarId :: acc
-  let (solution, srcFVarIds) ← withSrcMCtx do src.withContext do
+  let (solution, srcFVarIds) ← withSrcContext do
     let solution ← instantiateMVars (.mvar src)
 
     let srcLCtx := (← src.getDecl).lctx
@@ -475,7 +477,7 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     : MetaM (Option (Std.HashMap FVarId FVarId)) := do
     if iSrc ≥ m then
       -- With mctx depth to prevent any mvar assignment.
-      let targetSrc ← withSrcMCtx do src.withContext do
+      let targetSrc ← withSrcContext do
         instantiateMVars $ ← src.getType
       if targetSrc.hasExprMVar then
         return .none
@@ -496,7 +498,7 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
     let dstFVarId := dstFVarIds[iSrc + iDst + iOffset]!
 
     -- Compare the types and values of the fvars
-    let (srcFVarType, srcFVarValue?) ← withSrcMCtx <| src.withContext do
+    let (srcFVarType, srcFVarValue?) ← withSrcContext do
       let type ← instantiateMVars $ ← srcFVarId.getType
       let value ← (← srcFVarId.getValue?).mapM instantiateMVars
       return (type, value)
@@ -556,10 +558,10 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
 
   return .subsumed
   where
-  withSrcMCtx { M α } [Monad M] [MonadControlT MetaM M] (m : M α) : M α :=
+  withSrcContext { M α } [Monad M] [MonadControlT MetaM M] (m : M α) : M α :=
     match srcMCtx? with
-    | .some mctx => Meta.withMCtx mctx m
-    | .none => m
+    | .some mctx => Meta.withMCtx mctx $ src.withContext m
+    | .none => src.withContext m
   isEq (e1 e2 : Expr) : MetaM Bool :=
     Meta.withReducible $ Meta.isDefEqGuarded e1 e2
 

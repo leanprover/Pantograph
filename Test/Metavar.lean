@@ -372,6 +372,15 @@ def test_subsume_extra_fvar : TestM Unit := do
     Meta.check expr
     checkFalse "assigned" expr.hasExprMVar
 
+def test_subsume_not_prop : TestM Unit := do
+  let nat ← Elab.Term.elabTerm (← `(term|Nat)) .none
+  let g1 ← Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar nat
+  let sol ← Elab.Term.elabTerm (← `(term|123)) (.some nat)
+  g1.assign sol
+  let g2 ← Expr.mvarId! <$> Meta.mkFreshExprSyntheticOpaqueMVar nat
+  let subsumeFlag ← canSubsume? g2 g1
+  checkEq "¬ subsume" subsumeFlag .none
+
 /-- This should cause delay assignment, if implemented in the most efficient way -/
 def test_subsume_smaller : TestM Unit := do
   let stDst ← Elab.Term.elabTerm (← `(term|∀ (p : Prop) (q : Prop) (h : p), p ∨ p)) .none
@@ -465,7 +474,7 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Replay Environment", test_replay_environment),
     ("Subsume fail", test_subsume_fail),
     ("Subsume extra fvar", test_subsume_extra_fvar),
-    ("Subsume smaller", test_subsume_smaller),
+    ("Subsume smaller", test_subsume_not_prop),
     ("Subsume have", test_subsume_have),
     ("Subsume unfold irreducible", test_subsume_unfold false),
     ("Subsume unfold reducible", test_subsume_unfold true),
