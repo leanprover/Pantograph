@@ -258,7 +258,7 @@ structure GoalStart where
 structure GoalStartResult where
   stateId: Nat := 0
   -- Name of the root metavariable
-  root: String
+  root: Name
   deriving ToJson
 structure GoalTactic where
   stateId: Nat
