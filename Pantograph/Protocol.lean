@@ -12,6 +12,8 @@ import Lean.Message
 
 namespace Pantograph.Protocol
 
+open Lean (FromJson ToJson Name)
+
 
 /-- Main Option structure, placed here to avoid name collision -/
 structure Options where
