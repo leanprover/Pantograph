@@ -512,6 +512,8 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
         | .none => pure none
         | .some .none =>
           return false
+      if srcFVarValue'?.map (·.hasExprMVar) |>.getD false then
+        return false
       goal.withContext do
         let flagValue ← match srcFVarValue'?, ← dstFVarId.getValue? with
           | .some v1, .some v2 => isEq v1 v2
