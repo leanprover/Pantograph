@@ -569,14 +569,17 @@ def subsumeAny (goal : MVarId) (candidates : Array MVarId) (srcMCtx? : Option Me
   : MetaM (Subsumption × Option MVarId) := do
   if (← goal.findDecl?).isNone then
     throwError "Nonexistent metavariable: {goal.name}"
+  -- `.subsumed` has a higher precedence than `.cycle`
+  let mut candidate := (Subsumption.none, none)
+  let srcMCtx := srcMCtx?.getD (← getMCtx)
   for mvarId in candidates do
-    if (← mvarId.findDecl?).isNone then
+    if (srcMCtx.findDecl? mvarId).isNone then
       throwError "Nonexistent historical metavariable: {mvarId.name}"
-    let r ← canSubsume? goal mvarId srcMCtx?
-    if r matches .none then
-      continue
-    return (r, mvarId)
-  return (.none, .none)
+    match ← canSubsume? goal mvarId srcMCtx? with
+    | .none => continue
+    | .cycle => candidate := (.cycle, mvarId)
+    | .subsumed => return (.subsumed, mvarId)
+  return candidate
 
 protected def GoalState.subsume
   (state : GoalState) (goal : MVarId) (candidates : Array MVarId)
