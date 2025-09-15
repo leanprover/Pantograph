@@ -212,6 +212,19 @@ def assignWithAuxLemma (type : Expr) (value? : Option Expr := .none) : Elab.Tact
   goal.assign (.const name [])
   Elab.Tactic.pruneSolvedGoals
 
+/-- A function that takes many iterations to finish -/
+partial def collatz (n : Nat) : Elab.Tactic.TacticM Unit := do
+  if n ≤ 1 then
+    let g ← Elab.Tactic.getMainGoal
+    g.assign (.lit (.natVal n))
+    Elab.Tactic.pruneSolvedGoals
+  else if n % 2 == 0 then
+    Meta.withIncRecDepth do
+      collatz (n / 2)
+  else
+    Meta.withIncRecDepth do
+      collatz (3 * n + 1)
+
 end Tactic
 
 end Test
