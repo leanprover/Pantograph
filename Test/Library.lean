@@ -30,7 +30,28 @@ def test_expr_echo (env: Environment): IO LSpec.TestSeq := do
     return tests
   runCoreMSeq env (options := #["pp.proofs.threshold=100"]) inner
 
+def test_core_context (env : Environment) : IO LSpec.TestSeq := runTest do
+  let coreM := runTermElabM $ runTest do
+    let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar (.const `Nat [])).mvarId!
+    let (_, _) ← (Tactic.collatz 27).run { elaborator := .anonymous} |>.run { goals := [goal] }
+    fail "should fail"
+  let coreContext ← createCoreContext (options := #["maxRecDepth=10"])
+  match ← (coreM.run' coreContext { env }).toBaseIO with
+  | .error exception =>
+    let message ← exception.toMessageData.toString
+    checkEq "exception" message "maximum recursion depth has been reached\nuse `set_option maxRecDepth <num>` to increase limit\nuse `set_option diagnostics true` to get diagnostic information"
+  | .ok _ =>
+    fail "macRecDepth set should fail"
+  let coreContext ← createCoreContext (options := #["maxRecDepth=200"])
+  match ← (coreM.run' coreContext { env }).toBaseIO with
+  | .error exception =>
+    let message ← exception.toMessageData.toString
+    fail s!"Exception: {message}"
+  | .ok _ =>
+    pure ()
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   [
     ("expr_echo", test_expr_echo env),
+    ("core.context", test_core_context env)
   ]
