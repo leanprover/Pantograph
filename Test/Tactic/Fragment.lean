@@ -266,8 +266,8 @@ def test_calc: TestM Unit := do
     | other => do
       addTest $ assertUnreachable $ other.toString
       return ()
-  addTest $ LSpec.check tactic ((← state1.serializeGoals).map (·.devolatilize) =
-    #[interiorGoal [] "a + b = c + d"])
+  checkEq tactic ((← state1.serializeGoals).map (·.devolatilize))
+    #[interiorGoal [] "a + b = c + d"]
   let pred := "a + b = b + c"
   let .success state1 _ ← state1.calcEnter state1.mainGoal?.get! | fail "Could not enter calc"
   let state2 ← match ← state1.tacticOn 0 pred with
@@ -275,13 +275,13 @@ def test_calc: TestM Unit := do
     | other => do
       addTest $ assertUnreachable $ other.toString
       return ()
-  addTest $ LSpec.check s!"calc {pred} := _" ((← state2.serializeGoals).map (·.devolatilize) =
+  checkEq s!"calc {pred} := _" ((← state2.serializeGoals).map (·.devolatilize))
     #[
       { interiorGoal [] "a + b = b + c" with userName? := `calc },
       { interiorGoal [] "b + c = c + d" with fragment := .calc },
-    ])
-  addTest $ LSpec.test "(2.0 prev rhs)" (state2.calcPrevRhsOf? (state2.get! 0) |>.isNone)
-  addTest $ LSpec.test "(2.1 prev rhs)" (state2.calcPrevRhsOf? (state2.get! 1) |>.isSome)
+    ]
+  checkFalse "(2.0 prev rhs)" <| state2.fragments.contains (state2.get! 0)
+  checkTrue "(2.1 prev rhs)" <| state2.fragments[(state2.get! 1)]? matches .some (.calc ..)
 
   let tactic := "apply h1"
   let state2m ← match ← state2.tacticOn (goalId := 0) (tactic := tactic) with
@@ -300,11 +300,11 @@ def test_calc: TestM Unit := do
     | other => do
       addTest $ assertUnreachable $ other.toString
       return ()
-  addTest $ LSpec.check s!"calc {pred} := _" ((← state4.serializeGoals).map (·.devolatilize) =
+  checkEq s!"calc {pred} := _" ((← state4.serializeGoals).map (·.devolatilize))
     #[
       { interiorGoal [] "b + c = c + d" with userName? := `calc },
-    ])
-  addTest $ LSpec.test "(4.0 prev rhs)" (state4.calcPrevRhsOf? (state4.get! 0) |>.isNone)
+    ]
+  checkFalse "(4.0 prev rhs)" <| state4.fragments.contains (state4.get! 0)
   let tactic := "apply h2"
   let state4m ← match ← state4.tacticOn (goalId := 0) (tactic := tactic) with
     | .success state _ => pure state

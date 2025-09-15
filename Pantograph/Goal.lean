@@ -798,10 +798,6 @@ protected def GoalState.fragmentExit (state : GoalState) (site : Site):
       parentMVars,
     }
 
-protected def GoalState.calcPrevRhsOf? (state : GoalState) (goal : MVarId) : Option Expr := do
-  let .some (.calc prevRhs?) := state.fragments[goal]? | .none
-  prevRhs?
-
 @[export pantograph_goal_state_calc_enter_m]
 protected def GoalState.calcEnter (state : GoalState) (site : Site)
   : Elab.TermElabM TacticResult := do
