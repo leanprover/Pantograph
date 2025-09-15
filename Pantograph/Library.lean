@@ -55,7 +55,8 @@ def createCoreContext (options : Array String) : IO Core.Context := do
     openDecls := [],     -- No 'open' directives needed
     fileName := "<Pantograph>",
     fileMap := { source := "", positions := #[0] },
-    options := options
+    options,
+    maxRecDepth := maxRecDepth.get options,
   }
 
 /-- Creates a Core.State object needed to run all monads -/
