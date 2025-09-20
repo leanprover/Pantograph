@@ -379,6 +379,33 @@ theorem mystery2 : f 2 = 4 := sorry
   checkEq "goals" state.goals.length 0
   checkTrue "root" state.isSolved
 
+private def test_distil_predicate : Test := do
+  let input := "
+structure Command where
+  prog : String
+  args : List String
+  deriving Repr, DecidableEq
+
+def p (s : String) : Prop := s = \"ls\"
+
+theorem mystery (s : String) : p s := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  let state? ← (state.tryDraft .unfocus "by\n  unfold p\n  sorry").run' (ctx := defaultElabContext)
+  match state? with
+  | .success state _ =>
+    checkEq "goals" state.goals.length 1
+  | .failure messages =>
+    let messages ← messages.mapM (·.toString)
+    checkEq "messages" messages #[];
+    fail "failed"
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
+
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("sorry in middle", test_sorry_in_middle),
@@ -399,5 +426,6 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("distil companion", test_distil_companion),
     ("distil multiple conditions", test_distil_multiple_cond),
     ("distil existing value", test_distil_existing_value),
+    ("distil predicate", test_distil_predicate),
   ]
   tests.map (fun (name, test) => (name, runMetaMSeq env $ runTest test))
