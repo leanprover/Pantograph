@@ -82,24 +82,34 @@ def readCoreOptions : RefactorM Options := do
 def fail { α } (s : String) : IO α :=
   throw <| .userError s
 
+def mergeFileMap (fm1 fm2 : FileMap) : FileMap :=
+  let bias := fm1.source.endPos.byteIdx
+  let mappedPos := fm2.positions.map λ pos => { byteIdx := pos.byteIdx + bias }
+  {
+    source := s!"{fm1.source}\n{fm2.source}",
+    positions := fm1.positions.append mappedPos
+  }
+
 /-- Add one command to the refactored file -/
-def pushNewCommand (command : Format) : RefactorM Unit := do
-  modify λ state =>
-    let src := state.outContext.input ++ "\n" ++ command.pretty
-    let positions := state.outContext.fileMap.positions.push src.endPos
+def pushNewCommand (f : Format) : RefactorM Unit := do
+  modify λ state@{ outContext := outContext@{ fileMap, .. }, .. } =>
+    let payload := f.pretty
+    let merged := mergeFileMap fileMap payload.toFileMap
     {
       state with outContext := {
-        state.outContext with
-        input := src,
-        fileMap := {
-          source := src,
-          positions,
-        }
+        outContext with
+        input := merged.source,
+        fileMap := merged,
       }
     }
   -- After modification, run the parser ahead by one position
   let { outContext := inputCtx, outState, .. } ← get
-  let (_end, outState) ← Elab.Frontend.processCommand.run { inputCtx } |>.run outState
+  let (_endFlag, outState@ { commandState := { messages, .. }, .. }) ←
+    Elab.Frontend.processCommand.run { inputCtx } |>.run outState
+  -- Ensure no error has occurred
+  if messages.hasErrors then
+    let messages ← messages.toList.mapM (·.toString)
+    throw (.userError s!"Error messages: {messages}")
   modify ({ · with outState })
 
 /-- Run `FrontendM` at the tail of the out file -/
@@ -221,7 +231,7 @@ def distilSearchTarget { α } (head : Command) (tail : List Command) (f : (Expr 
     unfoldAuxLemmas $ ← unfoldMatchers e
 
 /-- Fold `sorry`s into one definition -/
-def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format := do
+def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Syntax.Command := do
   -- Concatenate all doc comments
   let allDocs := "\n".intercalate $ (head :: tail).filterMap λ command =>
     let `(docComment|$comment) := command.comments
@@ -244,8 +254,7 @@ def foldTheoremsFlat (head : Command) (tail : List Command) : RefactorM Format :
       PrettyPrinter.delab target
     let theoremIdent := mkIdent $ Name.mkSimple s!"{binderName}_composite"
     let comment? := if allDocs.isEmpty then .none else .some $ mkDocComment allDocs
-    let command ← `(command|$[$comment?:docComment]? def $theoremIdent : $target := sorry)
-    PrettyPrinter.ppCommand command
+    `(command|$[$comment?:docComment]? def $theoremIdent : $target := sorry)
 
 structure DependencyTracker where
   -- Constants generated during the next batch of commands to be processed
@@ -327,7 +336,7 @@ def collectNextCommand : RefactorM Unit := do
     pushNewCommand' (⟨command.stx⟩ : Syntax.Command)
 
   let f ← foldTheoremsFlat decl depstr.component
-  pushNewCommand f
+  pushNewCommand' f
 
 end Refactor
 

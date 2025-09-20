@@ -189,6 +189,7 @@ def distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command)
     | _, _ => `x
   Refactor.distilSearchTarget head tail λ (witness, witnessValue) companions => do
   if companions.isEmpty then
+    Meta.check witness
     -- Without companions, we can directly construct a goal state
     let goalState ← GoalState.create witness
     let goalState ← if !config.ignoreValues then
@@ -250,7 +251,6 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
       let decl :: commands := commands
         | Refactor.fail "No commands left"
       modify ({ · with commands }) -- Prevents infinite loop
-
       let isSearchTarget ← decl.runCoreM do
         if decl.constants.isEmpty then
           return false

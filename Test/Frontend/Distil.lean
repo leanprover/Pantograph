@@ -379,11 +379,13 @@ theorem mystery2 : f 2 = 4 := sorry
   checkEq "goals" state.goals.length 0
   checkTrue "root" state.isSolved
 
+/-- Tests handling of newline chars -/
 private def test_distil_predicate : Test := do
   let input := "
 structure Command where
   prog : String
   args : List String
+
   deriving Repr, DecidableEq
 
 def p (s : String) : Prop := s = \"ls\"
@@ -392,6 +394,7 @@ theorem mystery (s : String) : p s := sorry
   "
   let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
     | fail "Incorrect number of search states"
+  checkTrue "has `p" <| (state.env.find? `p).isSome
   let state? ← (state.tryDraft .unfocus "by\n  unfold p\n  sorry").run' (ctx := defaultElabContext)
   match state? with
   | .success state _ =>
