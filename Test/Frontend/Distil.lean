@@ -213,7 +213,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
         var `m "Nat",
         var `n "Nat",
         var `ih "n + m = m + n",
-        { var `h2 "n + m = m" with value? := .some { pp? := "?m.11" }},
+        { var `h2 "n + m = m" with value? := .some { pp? := "?m.13" }},
       ],
     },
     {
@@ -230,7 +230,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
       vars := #[
         var `n "Nat",
         var `m "Nat",
-        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.5" }},
+        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.7" }},
       ],
     },
     {
@@ -379,6 +379,36 @@ theorem mystery2 : f 2 = 4 := sorry
   checkEq "goals" state.goals.length 0
   checkTrue "root" state.isSolved
 
+/-- Tests handling of newline chars -/
+private def test_distil_predicate : Test := do
+  let input := "
+structure Command where
+  prog : String
+  args : List String
+
+  deriving Repr, DecidableEq
+
+def p (s : String) : Prop := s = \"ls\"
+
+theorem mystery (s : String) : p s := sorry
+  "
+  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
+    | fail "Incorrect number of search states"
+  checkTrue "has `p" <| (state.env.find? `p).isSome
+  let state? ← (state.tryDraft .unfocus "by\n  unfold p\n  sorry").run' (ctx := defaultElabContext)
+  match state? with
+  | .success state _ =>
+    checkEq "goals" state.goals.length 1
+  | .failure messages =>
+    let messages ← messages.mapM (·.toString)
+    checkEq "messages" messages #[];
+    fail "failed"
+  | .parseError e =>
+    fail s!"Parse error: {e}"
+  | .invalidAction e =>
+    fail s!"Invalid action: {e}"
+
+
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("sorry in middle", test_sorry_in_middle),
@@ -399,5 +429,6 @@ def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
     ("distil companion", test_distil_companion),
     ("distil multiple conditions", test_distil_multiple_cond),
     ("distil existing value", test_distil_existing_value),
+    ("distil predicate", test_distil_predicate),
   ]
   tests.map (fun (name, test) => (name, runMetaMSeq env $ runTest test))
