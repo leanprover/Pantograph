@@ -7,6 +7,24 @@ namespace Pantograph.Test.Frontend.Refactor
 
 abbrev Test := Environment → TestT IO Unit
 
+deriving instance Repr, DecidableEq for FileMap
+
+private def test_merge_file_map : Test := λ _env ↦ do
+  let src1 := "
+set_option pp.explicit true
+open Nat in
+def f : Nat → Nat := id
+  ".trim
+  let src2 := "
+set_option pp.explicit true
+open Nat in
+def f : Nat → Nat :=
+  id
+  ".trim
+  let filemap1 := s!"{src1}\n{src2}".toFileMap
+  let filemap2 := Refactor.mergeFileMap src1.toFileMap src2.toFileMap
+  checkEq "result" filemap1 filemap2
+
 example : Σ' f : Nat → Nat, ∀ (n : Nat), f n = n := by
   constructor
   intro n; rfl
@@ -84,6 +102,7 @@ def p_composite : { p : (Nat → Nat) → Prop // p Nat.succ } :=
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
+    ("merge file map", test_merge_file_map),
     ("id", test_id),
     ("simple", test_simple),
     ("invalid", test_invalid),

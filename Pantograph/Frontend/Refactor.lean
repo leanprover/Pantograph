@@ -83,11 +83,11 @@ def fail { α } (s : String) : IO α :=
   throw <| .userError s
 
 def mergeFileMap (fm1 fm2 : FileMap) : FileMap :=
-  let bias := fm1.source.endPos.byteIdx
+  let bias := fm1.source.endPos.byteIdx + 1
   let mappedPos := fm2.positions.map λ pos => { byteIdx := pos.byteIdx + bias }
   {
     source := s!"{fm1.source}\n{fm2.source}",
-    positions := fm1.positions.append mappedPos
+    positions := fm1.positions.take (fm1.positions.size - 1) ++ mappedPos
   }
 
 /-- Add one command to the refactored file -/
