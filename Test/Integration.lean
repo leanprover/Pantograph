@@ -361,7 +361,7 @@ def test_frontend_track : Test := do
 def test_frontend_distil_simple : Test := do
   let file := "theorem mystery (p: Prop) : p → p := sorry"
   let goal1: Protocol.Goal := {
-    name := "_uniq.1".toName,
+    name := "_uniq.3".toName,
     target := { pp? := .some "∀ (p : Prop), p → p" },
   }
   step "frontend.distil"
@@ -384,9 +384,9 @@ def test_frontend_distil_multiple : Test := do
   let withSorry := "theorem mystery (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.195".toName,
+    name := "_uniq.197".toName,
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.194".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.196".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.distil"
     ({

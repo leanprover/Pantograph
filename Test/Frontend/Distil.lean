@@ -213,7 +213,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
         var `m "Nat",
         var `n "Nat",
         var `ih "n + m = m + n",
-        { var `h2 "n + m = m" with value? := .some { pp? := "?m.11" }},
+        { var `h2 "n + m = m" with value? := .some { pp? := "?m.13" }},
       ],
     },
     {
@@ -230,7 +230,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
       vars := #[
         var `n "Nat",
         var `m "Nat",
-        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.5" }},
+        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.7" }},
       ],
     },
     {
