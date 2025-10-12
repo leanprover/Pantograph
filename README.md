@@ -4,8 +4,8 @@ A Machine-to-Machine interaction system for Lean 4.
 
 ![Pantograph](doc/icon.svg)
 
-Pantograph provides interfaces to execute proofs, construct expressions, and
-examine the symbol list of a Lean project for machine learning.
+Pantograph provides interfaces to interact with Lean's frontend, execute proofs,
+construct expressions, and examining the Lean environment.
 
 See [documentations](doc/rationale.md) for design rationale and references.
 
@@ -45,3 +45,18 @@ Inject any project path via the `pantograph_init_search` function.
 
 See [Contributing](./doc/contributing.md).
 
+### Testing
+
+The tests are based on `LSpec`. To run tests, use either
+``` sh
+nix flake check
+```
+or
+``` sh
+lake test
+```
+You can run an individual test suite by specifying a prefix
+
+``` sh
+lake test -- "Library/my_test"
+```
