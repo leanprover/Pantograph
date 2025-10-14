@@ -140,7 +140,7 @@ def goalStatePickle (goalState : GoalState) (path : System.FilePath) (background
     fragments,
   } := goalState
   -- Delete `MessageData`s
-  let syntheticMVars : MVarIdMap _ := syntheticMVars.fold (init := .empty) λ acc key val =>
+  let syntheticMVars : MVarIdMap _ := syntheticMVars.foldl (init := .empty) λ acc key val =>
     let kind := match val.kind with
       | .typeClass _ => .typeClass .none
       | .coe header? expectedType e f? _ => .coe header? expectedType e f? .none

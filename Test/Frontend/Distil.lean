@@ -213,7 +213,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
         var `m "Nat",
         var `n "Nat",
         var `ih "n + m = m + n",
-        { var `h2 "n + m = m" with value? := .some { pp? := "?m.13" }},
+        { var `h2 "n + m = m" with value? := .some { pp? := "?m.5" }},
       ],
     },
     {
@@ -230,7 +230,7 @@ theorem mystery : ∀ (n m: Nat), n + m = m + n := by
       vars := #[
         var `n "Nat",
         var `m "Nat",
-        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.7" }},
+        { var `h1 "0 + m = m" with value? := .some { pp? := "?m.2" }},
       ],
     },
     {
@@ -311,15 +311,16 @@ private def test_distil_circular : Test := do
   let input := "
 theorem test (p q : Prop) (hp : p) (hq : q) : p ∧ q ∧ p := by sorry
   "
+  let id := "test"
   let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
     | fail "Incorrect number of search states"
-  let result ← (state.tryTactic .unfocus "exact test p q hp hq").run' (ctx := defaultElabContext)
+  let result ← (state.tryTactic .unfocus s!"exact {id} p q hp hq").run' (ctx := defaultElabContext)
   match result with
   | .success .. =>
     fail s!"This should not succeed"
   | .failure messages =>
     let messages ← messages.mapM (·.toString)
-    checkEq "failure" messages #[s!"{← getFileName}:0:0: error: unknown identifier 'test'\n"]
+    checkEq "failure" messages #[s!"{← getFileName}:0:0: error(lean.unknownIdentifier): Unknown identifier `{id}`\n"]
   | .parseError e =>
     fail s!"Parse error: {e}"
   | .invalidAction e =>

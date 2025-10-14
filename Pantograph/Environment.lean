@@ -162,7 +162,7 @@ def replayConstantsRenaming (constants : Std.HashMap Name ConstantInfo) : CoreM 
   -- Remap constants
   let replaceConst (expr : Expr) : CoreM Expr := Core.transform expr λ
     | .const n levels =>
-      let n' := nameMap.findD n n
+      let n' := nameMap.getD n n
       return .done (.const n' levels)
     | e =>
       return .continue e
@@ -171,57 +171,57 @@ def replayConstantsRenaming (constants : Std.HashMap Name ConstantInfo) : CoreM 
       | .axiomInfo val@{ name, type, .. } =>
         pure <| .axiomInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
         }
       | .defnInfo val@{ name, type, value, .. } =>
         pure <| .defnInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
           value := ← replaceConst value,
         }
       | .thmInfo val@{ name, type, value, .. } =>
         pure <| .thmInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
           value := ← replaceConst value,
         }
       | .opaqueInfo val@{ name, type, value, .. } =>
         pure <| .opaqueInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
           value := ← replaceConst value,
         }
       | .quotInfo val@{ name, type, .. } =>
         pure <| .quotInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
         }
       | .inductInfo val@{ name, type, all, ctors, .. } =>
         pure <| .inductInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
-          all := all.map λ n => nameMap.findD n n,
-          ctors := ctors.map λ n => nameMap.findD n n,
+          all := all.map λ n => nameMap.getD n n,
+          ctors := ctors.map λ n => nameMap.getD n n,
         }
       | .ctorInfo val@{ name, type, induct, .. } =>
         pure <| .ctorInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
-          induct := nameMap.findD induct induct
+          induct := nameMap.getD induct induct
         }
       | .recInfo val@{ name, type, all, .. } =>
         pure <| .recInfo {
           val with
-          name := nameMap.findD name name,
+          name := nameMap.getD name name,
           type := ← replaceConst type,
-          all := all.map λ n => nameMap.findD n n,
+          all := all.map λ n => nameMap.getD n n,
         }
     return acc.insert name info'
   let env' ← (← getEnv).replay constants

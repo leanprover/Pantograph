@@ -147,7 +147,7 @@ def constantDependencies (env : Environment) (name : Name) : NameSet :=
   let const := env.find? name |>.get!
   let s := const.type.getUsedConstantsAsSet
   let s := match const.value? with
-    | .some v => s.union v.getUsedConstantsAsSet
+    | .some v => s.append v.getUsedConstantsAsSet
     | .none => s
   s
 
@@ -162,8 +162,8 @@ def hasSorry (step : CompilationStep) : Bool :=
 /-- Scroll to the end of the file, reading all compilation units in the process  -/
 def preprocess : FrontendM (List Command) := mapCompilationSteps λ step => do
   let constants ← step.newConstants
-  let dependencies := constants.fold (init := NameSet.empty) λ acc c =>
-    acc.union $ constantDependencies step.after c
+  let dependencies := constants.foldl (init := NameSet.empty) λ acc c =>
+    acc.append $ constantDependencies step.after c
   let commandState := (← getThe Elab.Frontend.State).commandState
   let unit := if step.msgs.any (·.severity == .error) then
       {
@@ -277,13 +277,13 @@ def extractDependencyStructure (head : Command) (commands : List Command)
     commands.zipIdx.partitionM λ (command, _) => do
       let tracker ← get
       if command.dependencies.any tracker.innerConstants.contains then
-        let innerConstants := command.constants.fold
+        let innerConstants := command.constants.foldl
           (init := tracker.innerConstants)
           λ acc n => acc.insert n
         modify ({· with innerConstants, isNonFlat := true})
         return true
       if command.dependencies.any head.constants.contains then
-        let innerConstants := command.constants.fold
+        let innerConstants := command.constants.foldl
           (init := tracker.innerConstants)
           λ acc n => acc.insert n
         modify ({· with innerConstants })

@@ -85,7 +85,7 @@ def test_define_proof : TestT Elab.TermElabM Unit := do
         { userName := `q, type? := .some { pp? := .some "Prop" } },
         { userName := `h, type? := .some { pp? := .some "p" } },
         { userName := `y,
-          type? := .some { pp? := .some "p ∨ ?m.19" },
+          type? := .some { pp? := .some "p ∨ ?m.9" },
           value? := .some { pp? := .some "Or.inl h" },
         }
       ]
@@ -259,7 +259,7 @@ def test_let (specialized: Bool): TestT Elab.TermElabM Unit := do
   | .failure #[message] =>
     checkEq tactic
       (← message.toString)
-      s!"{← getFileName}:0:0: error: type mismatch\n  h\nhas type\n  a : Prop\nbut is expected to have type\n  {mainTarget} : Prop\n"
+      s!"{← getFileName}:0:0: error: Type mismatch\n  h\nhas type\n  a\nbut is expected to have type\n  {mainTarget}\n"
   | other => do
     fail s!"Should be a failure: {other.toString}"
 

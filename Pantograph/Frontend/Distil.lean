@@ -53,7 +53,7 @@ protected def usedConstants (t: TacticInvocation) : NameSet :=
   info.goalsBefore
     |>.filterMap info.mctxAfter.getExprAssignmentCore?
     |>.map Expr.getUsedConstantsAsSet
-    |>.foldl .union .empty
+    |>.foldl .append .empty
 
 end TacticInvocation
 

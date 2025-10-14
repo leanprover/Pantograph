@@ -105,11 +105,12 @@ def test_nat_add_comm (manual: Bool): TestM Unit := do
   checkEq "intro n m" ((← state1.serializeGoals (options := ← read)).map (·.devolatilize))
     #[buildGoal [(`n, "Nat"), (`m, "Nat")] "n + m = m + n"]
 
-  match ← state1.tacticOn 0 "assumption" with
+  let tactic := "assumption"
+  match ← state1.tacticOn 0 tactic with
   | .failure #[message] =>
-    checkEq "assumption"
+    checkEq tactic
       (← message.toString)
-      s!"{← getFileName}:0:0: error: tactic 'assumption' failed\nn m : Nat\n⊢ n + m = m + n\n"
+      s!"{← getFileName}:0:0: error: Tactic `{tactic}` failed\n\nn m : Nat\n⊢ n + m = m + n\n"
   | other => do
     addTest $ assertUnreachable other.toString
 

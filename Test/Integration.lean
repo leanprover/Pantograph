@@ -76,10 +76,11 @@ def test_malformed_command : Test := do
   step "expr.echo" (Lean.Json.mkObj [(invalid, .str "Random garbage data")])
    ({ error := "command", desc := s!"Unable to parse json: Pantograph.Protocol.ExprEcho.expr: String expected" }:
     Protocol.InteractionError) (name? := .some "JSON Deserialization")
-def test_tactic : Test := do
+def test_tactic_normal : Test := do
   let varX := { name := "_uniq.10".toName, userName := `x, type? := .some { pp? := .some "Prop" }}
+  let i1 := 11
   let goal1: Protocol.Goal := {
-    name := "_uniq.11".toName,
+    name := s!"_uniq.{i1}".toName,
     target := { pp? := .some "∀ (q : Prop), x ∨ q → q ∨ x" },
     vars := #[varX],
   }
@@ -97,8 +98,8 @@ def test_tactic : Test := do
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.print" ({ stateId := 1, parentExprs? := .some true, rootExpr? := .some true }: Protocol.GoalPrint)
    ({
-     root? := .some { pp? := "fun x => ?m.11"},
-     parentExprs? := .some [.some { pp? := .some "fun x => ?m.11" }],
+     root? := .some { pp? := s!"fun x => ?m.2"},
+     parentExprs? := .some [.some { pp? := .some s!"fun x => ?m.2" }],
    }: Protocol.GoalPrintResult)
   step "goal.tactic" ({ stateId := 1, tactic? := .some "intro y" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 2, goals? := #[goal2], }: Protocol.GoalTacticResult)
@@ -108,7 +109,7 @@ def test_tactic : Test := do
         fileName := ← getFileName,
         kind := .anonymous,
         pos := ⟨0, 0⟩,
-        data := "tactic 'apply' failed, could not unify the conclusion of `@Nat.le_of_succ_le`\n  ∀ {m : Nat}, Nat.succ ?n ≤ m → ?n ≤ m\nwith the goal\n  ∀ (q : Prop), x ∨ q → q ∨ x\n\nNote: The full type of `@Nat.le_of_succ_le` is\n  ∀ {n m : Nat}, n.succ ≤ m → n ≤ m\nx : Prop\n⊢ ∀ (q : Prop), x ∨ q → q ∨ x",
+        data := "Tactic `apply` failed: could not unify the conclusion of `@Nat.le_of_succ_le`\n  ∀ {m : Nat}, Nat.succ ?n ≤ m → ?n ≤ m\nwith the goal\n  ∀ (q : Prop), x ∨ q → q ∨ x\n\nNote: The full type of `@Nat.le_of_succ_le` is\n  ∀ {n m : Nat}, n.succ ≤ m → n ≤ m\n\nx : Prop\n⊢ ∀ (q : Prop), x ∨ q → q ∨ x",
       }]
     }: Protocol.GoalTacticResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "sorry" }: Protocol.GoalTactic)
@@ -353,7 +354,7 @@ def test_frontend_track : Test := do
          pos := ⟨1, 15⟩,
          endPos := .some ⟨1, 20⟩,
          severity := .error,
-         data := "type mismatch\n  false\nhas type\n  Bool : Type\nbut is expected to have type\n  Nat : Type"
+         data := "Type mismatch\n  false\nhas type\n  Bool\nbut is expected to have type\n  Nat"
        },
      ],
    } : Protocol.FrontendTrackResult)
@@ -384,9 +385,9 @@ def test_frontend_distil_multiple : Test := do
   let withSorry := "theorem mystery (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.197".toName,
+    name := "_uniq.198".toName,
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.196".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.197".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.distil"
     ({
@@ -440,7 +441,7 @@ def suite (env : Lean.Environment): List (String × IO LSpec.TestSeq) :=
     ("expr.echo", test_expr_echo),
     ("options.set options.print", test_option_modify),
     ("Malformed command", test_malformed_command),
-    ("goal.tactic normal", test_tactic),
+    ("goal.tactic normal", test_tactic_normal),
     ("goal.tactic Timeout", test_tactic_timeout),
     ("Manual Mode", test_automatic_mode false),
     ("Automatic Mode", test_automatic_mode true),
