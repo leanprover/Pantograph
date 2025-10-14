@@ -14,7 +14,7 @@ def test_expr_echo (env: Environment): IO LSpec.TestSeq := do
     let tests := LSpec.TestSeq.done
     let echoResult ← runTermElabM $ exprEcho prop_and_proof (options := {})
     let tests := tests.append (LSpec.test "fail" (echoResult.toOption == .some {
-      type := { pp? := "?m.2" }, expr := { pp? := "?m.3" }
+      type := { pp? := "?m.1" }, expr := { pp? := "?m.2" }
     }))
     let echoResult ← runTermElabM $ exprEcho prop_and_proof (expectedType? := .some "Σ' p:Prop, p") (options := { printExprAST := true })
     let tests := tests.append (LSpec.test "fail" (echoResult.toOption == .some {

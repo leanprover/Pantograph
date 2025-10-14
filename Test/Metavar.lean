@@ -192,7 +192,7 @@ def test_proposition_generation: TestM Unit := do
       addTest $ assertUnreachable $ other.toString
       return ()
   addTest $ LSpec.check ":= λ (x: Nat), _" ((← state2.serializeGoals (options := ← read)).map (·.target.pp?) =
-    #[.some "?m.30 x"])
+    #[.some "?m.9 x"])
   checkTrue "(2 root)" $ ¬ state2.isSolved
 
   let assign := "Eq.refl x"
@@ -258,7 +258,7 @@ def test_partial_continuation: TestM Unit := do
 
   -- Continuation should fail if the state does not exist:
   match state0.resume coupled_goals with
-  | .error error => checkEq "(continuation failure message)" error "Goals [_uniq.45, _uniq.46, _uniq.43, _uniq.52] are not in scope"
+  | .error error => checkEq "(continuation failure message)" error s!"Goals {coupled_goals} are not in scope"
   | .ok _ => fail "(continuation should fail)"
   -- Continuation should fail if some goals have not been solved
   match state2.continue state1 with
