@@ -168,11 +168,17 @@ Convert an expression to an equivalent form with
 3. No assigned mvars
  -/
 @[export pantograph_instantiate_all_m]
-def instantiateAll (e : Expr) : MetaM Expr := do
-  let e ← instantiateDelayedMVars e
-  let e ← unfoldAuxLemmas e
-  let e ← unfoldMatchers e
-  return e
+def instantiateAll (expr : Expr) : MetaM Expr := do
+  let expr ← instantiateDelayedMVars expr
+  Core.transform expr λ e => do
+    if let .some e' ← Meta.delta? e isAuxLemma then
+      return .visit e'
+    if let .some mapp ← Meta.matchMatcherApp? e then
+      let .some matcherInfo := (← getEnv).find? mapp.matcherName | panic! "Matcher must exist"
+      let f ← Meta.instantiateValueLevelParams matcherInfo mapp.matcherLevels.toList
+      let mdata := KVMap.empty.insert `matcher (DataValue.ofName mapp.matcherName)
+      return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
+    return .continue
 
 structure DelayedMVarInvocation where
   mvarIdPending : MVarId
@@ -241,8 +247,7 @@ protected def visibleFVarsOfMVar (mctx: MetavarContext) (mvarId: MVarId): Option
     | some decl => if decl.isAuxDecl ∨ decl.isImplementationDetail then r else r.push decl.fvarId
     | none      => r
 
-@[export pantograph_to_condensed_goal_m]
-def toCondensedGoal (mvarId: MVarId): MetaM Condensed.Goal := do
+def toCondensedGoal (mvarId : MVarId) (instantiate := instantiateAll) : MetaM Condensed.Goal := do
   let ppAuxDecls     := Meta.pp.auxDecls.get (← getOptions)
   let ppImplDetailHyps := Meta.pp.implementationDetailHyps.get (← getOptions)
   let mvarDecl ← mvarId.getDecl
@@ -273,18 +278,15 @@ def toCondensedGoal (mvarId: MVarId): MetaM Condensed.Goal := do
         context := vars.reverse.toArray,
         target := ← instantiate mvarDecl.type
     }
-  where
-  instantiate := instantiateAll
 
-@[export pantograph_goal_state_to_condensed_m]
-protected def GoalState.toCondensed (state: GoalState):
-    CoreM (Array Condensed.Goal):= do
+protected def GoalState.toCondensed (state: GoalState) (instantiate := instantiateAll)
+  : CoreM (Array Condensed.Goal):= do
   let metaM := do
     let goals := state.goals.toArray
     goals.mapM fun goal => do
       match state.mctx.findDecl? goal with
       | .some _ =>
-        let serializedGoal ← toCondensedGoal goal
+        let serializedGoal ← toCondensedGoal goal (instantiate := instantiate)
         pure serializedGoal
       | .none => throwError s!"Metavariable does not exist in context {goal.name}"
   metaM.run' (s := state.savedState.term.meta.meta)
