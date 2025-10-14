@@ -168,11 +168,17 @@ Convert an expression to an equivalent form with
 3. No assigned mvars
  -/
 @[export pantograph_instantiate_all_m]
-def instantiateAll (e : Expr) : MetaM Expr := do
-  let e ← instantiateDelayedMVars e
-  let e ← unfoldAuxLemmas e
-  let e ← unfoldMatchers e
-  return e
+def instantiateAll (expr : Expr) : MetaM Expr := do
+  let expr ← instantiateDelayedMVars expr
+  Core.transform expr λ e => do
+    if let .some e' ← Meta.delta? e isAuxLemma then
+      return .visit e'
+    if let .some mapp ← Meta.matchMatcherApp? e then
+      let .some matcherInfo := (← getEnv).find? mapp.matcherName | panic! "Matcher must exist"
+      let f ← Meta.instantiateValueLevelParams matcherInfo mapp.matcherLevels.toList
+      let mdata := KVMap.empty.insert `matcher (DataValue.ofName mapp.matcherName)
+      return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
+    return .continue
 
 structure DelayedMVarInvocation where
   mvarIdPending : MVarId
