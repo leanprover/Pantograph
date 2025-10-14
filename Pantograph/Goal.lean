@@ -268,7 +268,7 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
   let mapExpr (e : Expr) : CoreM Expr := Core.transform e λ
     | .const n levels =>
       let levels' := levels.map mapLevel
-      let n' := nameMap.findD n n
+      let n' := nameMap.getD n n
       pure $ .done $ .const n' levels'
     | .sort level => pure $ .done $ .sort (mapLevel level)
     | .mvar { name } => pure $ .done $ .mvar ⟨mapId name⟩
@@ -429,7 +429,7 @@ inductive Subsumption where
 def mapFVars (expr : Expr) (φ : FVarIdMap FVarId)
   : CoreM (Option Expr) := OptionT.run $ Core.transform expr λ
     | .fvar fvarId => do
-      let .some fvarId' := φ.find? fvarId
+      let .some fvarId' := φ.get? fvarId
         | OptionT.fail
       return .done (.fvar fvarId')
     | e =>
@@ -546,7 +546,7 @@ def canSubsume? (goal src : MVarId) (srcMCtx? : Option MetavarContext := .none)
   if false then --srcFVarIds.length = srcLCtx.size then
     -- Use delayed assignments to avoid duplication. In this case we can
     -- directly map between the src and dst free variables.
-    let li := srcFVarIds.toArray.map (.fvar <| φ.find! ·)
+    let li := srcFVarIds.toArray.map (.fvar <| φ.get! ·)
     assignDelayedMVar goal li src
   else
     goal.withContext do
