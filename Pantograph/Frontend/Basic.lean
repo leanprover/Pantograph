@@ -116,14 +116,14 @@ def processOneCommand: FrontendM (CompilationStep × Bool) := do
   let before := s.env
   let done ← processCommand
   let stx := (← get).commands.back!
-  let src := (← readThe Elab.Frontend.Context).inputCtx.input.toSubstring.extract
+  let src := (← readThe Elab.Frontend.Context).inputCtx.substring
     (← get).cmdPos
     (← get).parserState.pos
   let s' := (← get).commandState
   let after := s'.env
   let msgs := s'.messages.toList.drop s.messages.toList.length
   let trees := s'.infoState.trees.drop s.infoState.trees.size
-  let ⟨_, fileName, fileMap⟩  := (← readThe Elab.Frontend.Context).inputCtx
+  let { fileName, fileMap, .. }  := (← readThe Elab.Frontend.Context).inputCtx
   return ({ scope := s.scopes.head!, fileName, fileMap, src, stx, before, after, msgs, trees }, done)
 
 /-- Executes a `FrontendM`-based monad until completion -/

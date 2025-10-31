@@ -98,8 +98,10 @@ def pushNewCommand (f : Format) : RefactorM Unit := do
     {
       state with outContext := {
         outContext with
-        input := merged.source,
+        inputString := merged.source,
         fileMap := merged,
+        endPos := merged.source.endPos,
+        endPos_valid := by simp,
       }
     }
   -- After modification, run the parser ahead by one position
@@ -354,8 +356,10 @@ def runRefactor (env : Environment) (source : String)
       collectNextCommand
   let outContext := {
     fContext.inputCtx with
-    input := "",
+    inputString := "",
     fileMap := "".toFileMap,
+    endPos := "".endPos,
+    endPos_valid := by simp,
   }
   let parserState := {}
   let outState := {
@@ -365,6 +369,6 @@ def runRefactor (env : Environment) (source : String)
   }
   let (_, state) ← m.run { config, inContext := fContext.inputCtx }
     |>.run { outContext, outState, commands }
-  return state.outContext.input
+  return state.outContext.inputString
 
 export Refactor (RefactorM)
