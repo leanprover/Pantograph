@@ -48,7 +48,7 @@ def test_sexp_of_elab (env: Environment): IO LSpec.TestSeq := do
     ("λ x: Nat × Bool => x.1", [], "(:lambda x ((:c Prod) (:c Nat) (:c Bool)) ((:c Prod.fst) (:c Nat) (:c Bool) 0))"),
     ("λ {α: Sort (u + 1)} => List α", [`u], "(:lambda α (:sort (+ u 1)) ((:c List) 0) :i)"),
     ("λ {α} => List α", [], "(:lambda α (:sort (+ (:mv _uniq.4) 1)) ((:c List) 0) :i)"),
-    ("(2: Nat) <= (5: Nat)", [], "((:c LE.le) (:mv _uniq.20) (:mv _uniq.21) ((:c OfNat.ofNat) (:mv _uniq.4) (:lit 2) (:mv _uniq.5)) ((:c OfNat.ofNat) (:mv _uniq.15) (:lit 5) (:mv _uniq.16)))"),
+    ("(2: Nat) <= (5: Nat)", [], "((:c LE.le) (:mv _uniq.16) (:mv _uniq.17) ((:c OfNat.ofNat) (:mv _uniq.4) (:lit 2) (:mv _uniq.5)) ((:c OfNat.ofNat) (:mv _uniq.11) (:lit 5) (:mv _uniq.12)))"),
   ]
   entries.foldlM (λ suites (source, levels, target) =>
     let termElabM := do

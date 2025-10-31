@@ -24,7 +24,7 @@ def test_instantiate_mvar: TestM Unit := do
       return ()
   let t ← Lean.Meta.inferType expr
   checkEq "typing" (toString (← serializeExpressionSexp t))
-    "((:c LE.le) (:c Nat) (:c instLENat) ((:c OfNat.ofNat) (:mv _uniq.2) (:lit 2) (:mv _uniq.3)) ((:c OfNat.ofNat) (:mv _uniq.15) (:lit 5) (:mv _uniq.16)))"
+    "((:c LE.le) (:c Nat) (:c instLENat) ((:c OfNat.ofNat) (:mv _uniq.2) (:lit 2) (:mv _uniq.3)) ((:c OfNat.ofNat) (:mv _uniq.11) (:lit 5) (:mv _uniq.12)))"
   return ()
 
 def startProof (expr: String): TestM (Option GoalState) := do
