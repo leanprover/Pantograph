@@ -121,7 +121,10 @@
         };
         formatter = pkgs.alejandra;
         devShells.default = pkgs.mkShell {
-          buildInputs = [lean.lean-all lean.lean];
+          buildInputs = [
+            pkgs.pre-commit
+            lean.lean-all
+          ];
         };
       };
     };
