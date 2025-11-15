@@ -238,9 +238,9 @@ def isLHS (g: Goal) : Bool := isLHSGoal? g.target |>.isSome
 
 end Condensed
 
--- Get the list of visible (by default) free variables from a goal
+/-- Get the list of visible (by default) free variables from a goal -/
 @[export pantograph_visible_fvars_of_mvar]
-protected def visibleFVarsOfMVar (mctx: MetavarContext) (mvarId: MVarId): Option (Array FVarId) := do
+def visibleFVarsOfMVar (mctx: MetavarContext) (mvarId: MVarId): Option (Array FVarId) := do
   let mvarDecl ← mctx.findDecl? mvarId
   let lctx := mvarDecl.lctx
   return lctx.decls.foldl (init := #[]) fun r decl? => match decl? with
