@@ -77,26 +77,15 @@ def unfoldMatchers (expr : Expr) : CoreM Expr :=
     let mdata := KVMap.empty.insert `matcher (DataValue.ofName mapp.matcherName)
     return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
 
-/--
-Force the instantiation of delayed metavariables even if they cannot be fully
-instantiated. This is used during resumption to provide diagnostic data about
-the current goal.
-
-Since Lean 4 does not have an `Expr` constructor corresponding to delayed
-metavariables, any delayed metavariables must be recursively handled by this
-function to ensure that nested delayed metavariables can be properly processed.
-The caveat is this recursive call will lead to infinite recursion if a loop
-between metavariable assignment exists.
-
-This function ensures any metavariable in the result is either
-1. Delayed assigned with its pending mvar not assigned in any form
-2. Not assigned (delay or not)
- -/
-partial def instantiateDelayedMVars (expr : Expr) : MetaM Expr :=
+partial def instantiateDelayedMVarsInner (expr : Expr) : StateRefT MVarIdSet MetaM Expr :=
   withTraceNode `Pantograph.Delate (λ _ex => return m!":= {← Meta.ppExpr expr}") do
   let mut result ← Meta.transform (← instantiateMVars expr)
     λ e => e.withApp fun f args => do
     let .mvar mvarId := f | return .continue
+    if (← get).contains mvarId then
+      throwError s!"MVarId cycle containing {mvarId.name}"
+    modify (·.insert mvarId)
+
     trace[Pantograph.Delate] "V {e}"
     let mvarDecl ← mvarId.getDecl
 
@@ -137,7 +126,7 @@ partial def instantiateDelayedMVars (expr : Expr) : MetaM Expr :=
           return .done result
 
         let pending ← mvarIdPending.withContext do
-          let inner ← instantiateDelayedMVars (.mvar mvarIdPending)
+          let inner ← self (.mvar mvarIdPending)
           trace[Pantograph.Delate] "Pre: {inner}"
           pure <| (← inner.abstractM fvars).instantiateRev args
 
@@ -159,7 +148,25 @@ partial def instantiateDelayedMVars (expr : Expr) : MetaM Expr :=
   trace[Pantoraph.Delate] "Result {result}"
   return result
   where
-  self e := instantiateDelayedMVars e
+  self e := instantiateDelayedMVarsInner e
+
+/--
+Force the instantiation of delayed metavariables even if they cannot be fully
+instantiated. This is used during resumption to provide diagnostic data about
+the current goal.
+
+Since Lean 4 does not have an `Expr` constructor corresponding to delayed
+metavariables, any delayed metavariables must be recursively handled by this
+function to ensure that nested delayed metavariables can be properly processed.
+The caveat is this recursive call will lead to infinite recursion if a loop
+between metavariable assignment exists.
+
+This function ensures any metavariable in the result is either
+1. Delayed assigned with its pending mvar not assigned in any form
+2. Not assigned (delay or not)
+ -/
+def instantiateDelayedMVars (expr : Expr) : MetaM Expr :=
+  instantiateDelayedMVarsInner expr |>.run' {}
 
 /--
 Convert an expression to an equivalent form with
