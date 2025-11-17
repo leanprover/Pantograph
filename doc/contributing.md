@@ -1,6 +1,10 @@
 # Contributing
 
 A Lean development shell is provided in the Nix flake. Nix usage is optional.
+Any contribution has to pass the pre-commit hooks:
+```sh
+pre-commit install --install-hooks
+```
 
 All commit messages must conform to the Conventional Commits specification.
 
@@ -35,5 +39,3 @@ let .some result := function
   | fail "incorrect"
 ```
 - Each test should be pinpointed and devolatilized.
-
-
