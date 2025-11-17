@@ -270,8 +270,10 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
     pure targets
   let outContext := {
     fContext.inputCtx with
-    input := "",
+    inputString := "",
     fileMap := "".toFileMap,
+    endPos := "".endPos,
+    endPos_valid := by simp,
   }
   let parserState := {}
   let outState := {
