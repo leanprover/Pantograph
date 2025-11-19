@@ -33,7 +33,7 @@ REPL.
 Example: (~5k symbols)
 ```
 $ repl Init
-env.catalog
+env.catalog {}
 env.inspect {"name": "Nat.le_add_left"}
 ```
 
@@ -41,7 +41,7 @@ Example with `mathlib4` (~90k symbols, may stack overflow, see troubleshooting)
 
 ```
 $ repl Mathlib.Analysis.Seminorm
-env.catalog
+env.catalog {}
 ```
 
 Example proving a theorem: (alternatively use `goal.start {"copyFrom": "Nat.add_comm"}`)
