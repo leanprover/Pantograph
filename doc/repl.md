@@ -78,6 +78,10 @@ The `$LEAN_PATH` executable of any project can be extracted by
 lake env printenv LEAN_PATH
 ```
 
+Additional modules cannot be imported after the perennial process starts, either
+via `env.load` or the frontend functions. The technical reason for this is when
+Lean cannot determine whether an imported module's initializer has run.
+
 ## Commands
 
 See `Pantograph/Protocol.lean` for a description of the parameters and return values in JSON.
