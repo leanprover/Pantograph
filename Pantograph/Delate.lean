@@ -77,14 +77,13 @@ def unfoldMatchers (expr : Expr) : CoreM Expr :=
     let mdata := KVMap.empty.insert `matcher (DataValue.ofName mapp.matcherName)
     return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
 
-partial def instantiateDelayedMVarsInner (expr : Expr) : StateRefT MVarIdSet MetaM Expr :=
+partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM Expr :=
   withTraceNode `Pantograph.Delate (λ _ex => return m!":= {← Meta.ppExpr expr}") do
   let mut result ← Meta.transform (← instantiateMVars expr)
     λ e => e.withApp fun f args => do
     let .mvar mvarId := f | return .continue
-    if (← get).contains mvarId then
+    if (← read).contains mvarId then
       throwError s!"MVarId cycle containing {mvarId.name}"
-    modify (·.insert mvarId)
 
     trace[Pantograph.Delate] "V {e}"
     let mvarDecl ← mvarId.getDecl
@@ -117,7 +116,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : StateRefT MVarIdSet Met
           throwError "Not enough arguments to instantiate a delay assigned mvar. This is due to bad implementations of a tactic: {args.size} < {fvars.size}. Expr: {toString e}; Origin: {toString expr}"
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments Begin"
-        let args ← args.mapM self
+        let args ← args.mapM (self mvarId)
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments End"
         if !(← mvarIdPending.isAssignedOrDelayedAssigned) then
@@ -126,7 +125,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : StateRefT MVarIdSet Met
           return .done result
 
         let pending ← mvarIdPending.withContext do
-          let inner ← self (.mvar mvarIdPending)
+          let inner ← self mvarId (.mvar mvarIdPending)
           trace[Pantograph.Delate] "Pre: {inner}"
           pure <| (← inner.abstractM fvars).instantiateRev args
 
@@ -139,7 +138,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : StateRefT MVarIdSet Met
         assert! !(← mvarId.isDelayedAssigned)
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments Begin"
-        let args ← args.mapM self
+        let args ← args.mapM (self mvarId)
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments End"
 
@@ -148,7 +147,8 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : StateRefT MVarIdSet Met
   trace[Pantoraph.Delate] "Result {result}"
   return result
   where
-  self e := instantiateDelayedMVarsInner e
+  self (mvarId : MVarId) (e : Expr) :=
+    withReader (λ r => MVarIdSet.insert r mvarId) $ instantiateDelayedMVarsInner e
 
 /--
 Force the instantiation of delayed metavariables even if they cannot be fully
@@ -166,7 +166,7 @@ This function ensures any metavariable in the result is either
 2. Not assigned (delay or not)
  -/
 def instantiateDelayedMVars (expr : Expr) : MetaM Expr :=
-  instantiateDelayedMVarsInner expr |>.run' {}
+  instantiateDelayedMVarsInner expr |>.run {}
 
 /--
 Convert an expression to an equivalent form with
