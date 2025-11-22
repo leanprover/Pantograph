@@ -60,7 +60,7 @@ def main (args: List String): IO Unit := do
     return
 
   unsafe do
-    Pantograph.initSearch ""
+    Pantograph.initSearch
 
   -- Separate imports and options
   let (options, imports) := args.partition (·.startsWith "--")

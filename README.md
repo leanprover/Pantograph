@@ -39,8 +39,6 @@ syntax or elaboration level data.
 with `Pantograph` which mirrors the REPL commands above. Note that there isn't a
 1-1 correspondence between executable (REPL) commands and library functions.
 
-Inject any project path via the `pantograph_init_search` function.
-
 ## Development
 
 See [Contributing](./doc/contributing.md).

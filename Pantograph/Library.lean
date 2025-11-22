@@ -37,9 +37,10 @@ def runMetaM { α } (metaM: MetaM α): CoreM α :=
 
 def errorI (type desc: String): Protocol.InteractionError := { error := type, desc := desc }
 
-/-- Adds the given paths to Lean package search path -/
+/-- Adds the given paths to Lean package search path. This must run with at
+least an empty string, otherwise Lean will not be able to find any symbols -/
 @[export pantograph_init_search]
-unsafe def initSearch (sp: String): IO Unit := do
+unsafe def initSearch (sp: String := ""): IO Unit := do
   Lean.enableInitializersExecution
   Lean.initSearchPath (← Lean.findSysroot) (sp := System.SearchPath.parse sp)
 
