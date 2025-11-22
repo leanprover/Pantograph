@@ -78,8 +78,8 @@ def runCoreM { α } (coreM : CoreM α) : EMainM α := do
   if let .some token := cancelTk? then
     runCancelTokenWithTimeout token (timeout := .ofBitVec timeout)
   let (result, state') ← match ← (coreM'.run coreCtx coreState).toIO' with
-    | Except.error (Exception.error _ msg)   => Protocol.throw { error := "core", desc := ← msg.toString }
-    | Except.error (Exception.internal id _) => Protocol.throw { error := "internal", desc := (← id.getName).toString }
+    | Except.error (Exception.error _ msg)   => Protocol.throw $ .errorIO (← msg.toString)
+    | Except.error (Exception.internal id _) => Protocol.throw $ .errorIO (← id.getName).toString
     | Except.ok a                            => pure a
   if (← read).inheritEnv && result matches .ok _ then
     setEnv state'.env
@@ -118,7 +118,7 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
   let name :=  args.name
   let info? := env.find? name
   let .some info := info?
-    | throw $ Protocol.errorIndex s!"Symbol not found {args.name}"
+    | throw $ .errorIndex s!"Symbol not found {args.name}"
   runCoreM do
   let module? := env.getModuleIdxFor? name >>=
     (λ idx => env.allImportedModuleNames[idx.toNat]?)
@@ -228,7 +228,7 @@ def env_add (args : Protocol.EnvAdd) : EMainM Protocol.EnvAddResult := withInher
     pure $ .ok (← instantiateMVars type, ← instantiateMVars value)
   let (type, value) ← match ← tvM.run' (ctx := {}) |>.run' with
     | .ok t => pure t
-    | .error e => Protocol.throw $ Protocol.errorExpr e
+    | .error e => Protocol.throw $ .errorParse e
   let decl := if isTheorem then
     Lean.Declaration.thmDecl <| Lean.mkTheoremValEx
       (name := name)
@@ -255,21 +255,21 @@ section Goal
 def goal_tactic (args : Protocol.GoalTactic) : EMainM Protocol.GoalTacticResult := do
   let state ← getMainState
   let .some goalState := state.goalStates[args.stateId]?
-    | throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
+    | throw $ .errorIndex s!"Invalid state index {args.stateId}"
   let unshielded := args.autoResume?.getD state.options.automaticMode
   let site ← match args.goalId?, unshielded with
     | .some goalId, true => do
       let .some goal := goalState.goals[goalId]? |
-        Protocol.throw $ Protocol.errorIndex s!"Invalid goal index {goalId}"
+        Protocol.throw $ .errorIndex s!"Invalid goal index {goalId}"
       pure (.prefer goal)
     | .some goalId, false => do
       let .some goal := goalState.goals[goalId]? |
-        Protocol.throw $ Protocol.errorIndex s!"Invalid goal index {goalId}"
+        Protocol.throw $ .errorIndex s!"Invalid goal index {goalId}"
       pure (.focus goal)
     | .none, true => pure .unfocus
     | .none, false => do
       let .some goal := goalState.mainGoal? |
-        Protocol.throw $ Protocol.errorIndex s!"No goals to be solved"
+        Protocol.throw $ .errorIndex s!"No goals to be solved"
       pure (.focus goal)
   let nextGoalState?: Except _ TacticResult ← liftTermElabM do
     -- NOTE: Should probably use a macro to handle this...
@@ -283,7 +283,7 @@ def goal_tactic (args : Protocol.GoalTactic) : EMainM Protocol.GoalTacticResult 
         pure $ Except.ok $ ← goalState.convEnter site
       | "calc" => do
         pure $ Except.ok $ ← goalState.calcEnter site
-      | _ => pure $ .error $ Protocol.errorOperation s!"Invalid mode {mode}"
+      | _ => pure $ .error $ .errorCommand s!"Invalid mode {mode}"
     | .none, .none, .some expr, .none, .none, .none => do
       pure $ Except.ok $ ← goalState.tryAssign site expr
     | .none, .none, .none, .some type, .none, .none => do
@@ -295,7 +295,7 @@ def goal_tactic (args : Protocol.GoalTactic) : EMainM Protocol.GoalTacticResult 
     | .none, .none, .none, .none, .none, .some draft => do
       pure $ Except.ok $ ← goalState.tryDraft site draft
     | _, _, _, _, _, _ =>
-      pure $ .error $ Protocol.errorOperation
+      pure $ .error $ .errorCommand
         "Exactly one of {tactic, mode, expr, have, let, draft} must be supplied"
   match nextGoalState? with
   | .error error => Protocol.throw error
@@ -359,7 +359,7 @@ def frontend_process (args : Protocol.FrontendProcess) : EMainM Protocol.Fronten
       pure (fileName, file)
     | .none, .some file =>
       pure (defaultFileName, file)
-    | _, _ => Protocol.throw $ errorI "arguments" "Exactly one of {fileName, file} must be supplied"
+    | _, _ => Protocol.throw $ .errorCommand "Exactly one of {fileName, file} must be supplied"
   let env?: Option Environment ← if args.readHeader then
       pure .none
     else do
@@ -418,7 +418,7 @@ def execute (command : Protocol.Command) : MainM Json := do
   let run { α β } [FromJson α] [ToJson β] (comm : α → EMainM β) : MainM Json := do
     let args ← match fromJson? command.payload with
       | .ok args => pure args
-      | .error error => return toJson $ errorCommand s!"Unable to parse json: {error}"
+      | .error error => return toJson $ Protocol.InteractionError.errorCommand s!"Unable to parse json: {error}"
     try
       let (out, result) ← IO.FS.withIsolatedStreams (isolateStderr := false) do
         commitIfNoEx $ comm args
@@ -428,7 +428,7 @@ def execute (command : Protocol.Command) : MainM Json := do
       | .ok result =>  return toJson result
       | .error ierror => return toJson ierror
     catch ex : IO.Error =>
-      let error : Protocol.InteractionError := { error := "io", desc := ex.toString }
+      let error : Protocol.InteractionError := .errorIO ex.toString
       return toJson error
   match command.cmd with
   | "reset"         => run reset
@@ -458,11 +458,9 @@ def execute (command : Protocol.Command) : MainM Json := do
   | "frontend.refactor" => run frontend_refactor
   | cmd =>
     let error: Protocol.InteractionError :=
-      errorCommand s!"Unknown command {cmd}"
+      .errorCommand s!"Unknown command {cmd}"
     return toJson error
   where
-  errorCommand := errorI "command"
-  errorIO := errorI "io"
   -- Command Functions
   reset (_: Protocol.Reset): EMainM Protocol.StatResult := do
     let state ← getMainState
@@ -510,7 +508,7 @@ def execute (command : Protocol.Command) : MainM Json := do
     let category := args.category
     match runParserCategory' (← getEnv) category args.input with
     | .ok (_, p) => return { pos := p.byteIdx }
-    | .error desc => throw { error := "parse", desc }
+    | .error desc => throw $ .errorParse desc
   goal_start (args: Protocol.GoalStart): EMainM Protocol.GoalStartResult := do
     let levelNames := (args.levels?.getD #[]).toList
     let expr?: Except _ GoalState ← liftTermElabM (levelNames := levelNames) do
@@ -518,10 +516,10 @@ def execute (command : Protocol.Command) : MainM Json := do
       | .some expr, .none => goalStartExpr expr |>.run
       | .none, .some copyFrom => do
         (match (← getEnv).find? copyFrom with
-        | .none => return .error <| Protocol.errorIndex s!"Symbol not found: {copyFrom}"
+        | .none => return .error <| .errorIndex s!"Symbol not found: {copyFrom}"
         | .some cInfo => return .ok (← GoalState.create cInfo.type))
       | _, _ =>
-        return .error <| errorI "arguments" "Exactly one of {expr, copyFrom} must be supplied"
+        return .error <| .errorCommand "Exactly one of {expr, copyFrom} must be supplied"
     match expr? with
     | .error error => Protocol.throw error
     | .ok goalState =>
@@ -530,16 +528,16 @@ def execute (command : Protocol.Command) : MainM Json := do
   goal_continue (args: Protocol.GoalContinue): EMainM Protocol.GoalContinueResult := do
     let state ← getMainState
     let .some target := state.goalStates[args.target]?
-      | throw $ Protocol.errorIndex s!"Invalid state index {args.target}"
+      | throw $ .errorIndex s!"Invalid state index {args.target}"
     let nextGoalState? : GoalState  ← match args.branch?, args.goals? with
       | .some branchId, .none => do
         match state.goalStates[branchId]? with
-        | .none => Protocol.throw $ Protocol.errorIndex s!"Invalid state index {branchId}"
+        | .none => Protocol.throw $ .errorIndex s!"Invalid state index {branchId}"
         | .some branch => pure $ target.continue branch
       | .none, .some goals =>
         let goals := goals.toList.map (⟨·⟩)
         pure $ target.resume goals
-      | _, _ => Protocol.throw $ errorI "arguments" "Exactly one of {branch, goals} must be supplied"
+      | _, _ => Protocol.throw $ .errorCommand "Exactly one of {branch, goals} must be supplied"
     match nextGoalState? with
     | .error error => Protocol.throw $ errorI "structure" error
     | .ok nextGoalState =>
@@ -552,11 +550,11 @@ def execute (command : Protocol.Command) : MainM Json := do
   goal_subsume (args : Protocol.GoalSubsume) : EMainM Protocol.GoalSubsumeResult := do
     let state ← getMainState
     let .some goalState := state.goalStates[args.stateId]?
-      | throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
+      | throw $ .errorIndex s!"Invalid state index {args.stateId}"
     let srcGoalState? ← match args.srcStateId? with
       | .some id => do
         let .some srcGoalState := state.goalStates[args.stateId]?
-          | throw $ Protocol.errorIndex s!"Invalid src state index {id}"
+          | throw $ .errorIndex s!"Invalid src state index {id}"
         pure $ .some srcGoalState
       | .none => pure .none
     let goal := ⟨args.goal⟩
@@ -574,7 +572,7 @@ def execute (command : Protocol.Command) : MainM Json := do
   goal_print (args: Protocol.GoalPrint): EMainM Protocol.GoalPrintResult := do
     let state ← getMainState
     let .some goalState := state.goalStates[args.stateId]? |
-      Protocol.throw $ Protocol.errorIndex s!"Invalid state index {args.stateId}"
+      Protocol.throw $ .errorIndex s!"Invalid state index {args.stateId}"
     let result ← liftMetaM <| goalPrint
         goalState
         (rootExpr := args.rootExpr?.getD False)
@@ -586,7 +584,7 @@ def execute (command : Protocol.Command) : MainM Json := do
   goal_save (args: Protocol.GoalSave): EMainM Protocol.GoalSaveResult := do
     let state ← getMainState
     let .some goalState := state.goalStates[args.id]? |
-      Protocol.throw $ Protocol.errorIndex s!"Invalid state index {args.id}"
+      Protocol.throw $ .errorIndex s!"Invalid state index {args.id}"
     goalStatePickle goalState args.path (background? := .some $ ← getEnv)
     return {}
   goal_load (args: Protocol.GoalLoad): EMainM Protocol.GoalLoadResult := do
@@ -619,7 +617,7 @@ def execute (command : Protocol.Command) : MainM Json := do
         let file ← Frontend.runRefactor (← getEnv) args.file { coreOptions }
         return { file }
       | .error e =>
-        throw $ errorI "parse" e
+        throw $ .errorParse e
     catch ex : IO.Error =>
       let error : Protocol.InteractionError := { error := "frontend", desc := ex.toString }
       throw error

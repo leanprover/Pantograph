@@ -33,7 +33,7 @@ REPL.
 Example: (~5k symbols)
 ```
 $ repl Init
-env.catalog
+env.catalog {}
 env.inspect {"name": "Nat.le_add_left"}
 ```
 
@@ -41,7 +41,7 @@ Example with `mathlib4` (~90k symbols, may stack overflow, see troubleshooting)
 
 ```
 $ repl Mathlib.Analysis.Seminorm
-env.catalog
+env.catalog {}
 ```
 
 Example proving a theorem: (alternatively use `goal.start {"copyFrom": "Nat.add_comm"}`)
@@ -77,6 +77,10 @@ The `$LEAN_PATH` executable of any project can be extracted by
 ``` sh
 lake env printenv LEAN_PATH
 ```
+
+Additional modules cannot be imported after the perennial process starts, either
+via `env.load` or the frontend functions. The technical reason for this is when
+Lean cannot determine whether an imported module's initializer has run.
 
 ## Commands
 
@@ -174,6 +178,11 @@ Common error forms:
 * `index`: Indicates an invariant maintained by the output of one command and
   input of another is broken. For example, attempting to query a symbol not
   existing in the library or indexing into a non-existent proof state.
+* `parse`: Indicates parsing errors
+* `elab`: Indicates elaboration errors
+* `frontend`: Indicates whole-file parsing and elaboration errors
+* `io`: Generic IO error
+* `command`: The command's argument is malformed
 
 ## Troubleshooting
 

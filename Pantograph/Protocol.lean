@@ -110,9 +110,16 @@ structure InteractionError where
   desc: String
   deriving ToJson
 
+namespace InteractionError
+
 def errorIndex (desc : String) : InteractionError := { error := "index", desc }
-def errorOperation (desc : String) : InteractionError := { error := "operation", desc }
+def errorCommand (desc : String) : InteractionError := { error := "command", desc }
 def errorExpr (desc : String) : InteractionError := { error := "expr", desc }
+def errorParse (desc : String) : InteractionError := { error := "parse", desc }
+def errorIO (desc : String) : InteractionError := { error := "io", desc }
+def errorException (desc : String) : InteractionError := { error := "exception", desc }
+
+end InteractionError
 
 structure Reset where
   deriving FromJson
