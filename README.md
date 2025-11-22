@@ -5,7 +5,7 @@ A Machine-to-Machine interaction system for Lean 4.
 ![Pantograph](doc/icon.svg)
 
 Pantograph provides interfaces to interact with Lean's frontend, execute proofs,
-construct expressions, and examining the Lean environment.
+construct expressions, and examine the Lean environment.
 
 See [documentations](doc/rationale.md) for design rationale and references.
 
@@ -39,24 +39,6 @@ syntax or elaboration level data.
 with `Pantograph` which mirrors the REPL commands above. Note that there isn't a
 1-1 correspondence between executable (REPL) commands and library functions.
 
-Inject any project path via the `pantograph_init_search` function.
-
 ## Development
 
 See [Contributing](./doc/contributing.md).
-
-### Testing
-
-The tests are based on `LSpec`. To run tests, use either
-``` sh
-nix flake check
-```
-or
-``` sh
-lake test
-```
-You can run an individual test suite by specifying a prefix
-
-``` sh
-lake test -- "Library/my_test"
-```
