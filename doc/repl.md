@@ -178,6 +178,11 @@ Common error forms:
 * `index`: Indicates an invariant maintained by the output of one command and
   input of another is broken. For example, attempting to query a symbol not
   existing in the library or indexing into a non-existent proof state.
+* `parse`: Indicates parsing errors
+* `elab`: Indicates elaboration errors
+* `frontend`: Indicates whole-file parsing and elaboration errors
+* `io`: Generic IO error
+* `command`: The command's argument is malformed
 
 ## Troubleshooting
 
