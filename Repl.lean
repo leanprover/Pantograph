@@ -105,13 +105,14 @@ def liftTermElabM { α } (termElabM : Elab.TermElabM α) (levelNames : List Name
 
 section Environment
 
-def env_catalog (_ : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
+def env_catalog (args : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
   let env ← MonadEnv.getEnv
-  let names := env.constants.fold (init := #[]) λ acc name info =>
+  let names := env.constants.fold (init := []) λ acc name info =>
     match toFilteredSymbol name info with
-    | .some x => acc.push x
+    | .some x => x :: acc
     | .none => acc
-  return { symbols := names }
+  IO.FS.writeFile args.filename $ String.join (names.map (· ++ "\n"))
+  return { nSymbols := names.length }
 def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
   let env ← MonadEnv.getEnv
   let options := (← getMainState).options
