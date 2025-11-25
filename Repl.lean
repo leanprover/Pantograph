@@ -105,12 +105,25 @@ def liftTermElabM { α } (termElabM : Elab.TermElabM α) (levelNames : List Name
 
 section Environment
 
-def env_catalog (_ : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
+def env_catalog (args : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
   let env ← MonadEnv.getEnv
   let names := env.constants.fold (init := #[]) λ acc name info =>
     match toFilteredSymbol name info with
     | .some x => acc.push x
     | .none => acc
+  -- filter names by prefixes user has requested
+  let names :=
+     if let .some inclPrefixes := args.inclPrefixes
+     then names.filter (fun (name: String) => inclPrefixes.any (name.startsWith ·))
+     else names
+  -- filter out any names explicitly excluded
+  let names :=
+      names.filter (fun name => ! args.exclPrefixes.any (name.startsWith ·))
+  --  if user has supplied a limit, limit by the first <limit> names
+  let names :=
+     if let .some limit := args.limit
+     then names.take limit
+     else names
   return { symbols := names }
 def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
   let env ← MonadEnv.getEnv

@@ -162,6 +162,9 @@ structure EnvModuleReadResult where
 
 -- Print all symbols in environment
 structure EnvCatalog where
+  inclPrefixes: Option (List String)
+  exclPrefixes: List String
+  limit: Option Nat
   deriving FromJson
 structure EnvCatalogResult where
   symbols: Array String
