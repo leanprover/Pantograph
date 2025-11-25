@@ -105,13 +105,23 @@ def liftTermElabM { α } (termElabM : Elab.TermElabM α) (levelNames : List Name
 
 section Environment
 
-def env_catalog (_ : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
+def env_catalog (args : Protocol.EnvCatalog) : EMainM Protocol.EnvCatalogResult := runCoreM do
   let env ← MonadEnv.getEnv
-  let names := env.constants.fold (init := #[]) λ acc name info =>
-    match toFilteredSymbol name info with
-    | .some x => acc.push x
-    | .none => acc
-  return { symbols := names }
+  let names := env.constants.fold (init := []) λ acc name info =>
+    let moduleAllow := match args.modulePrefix? with
+      | .some pr =>
+        let module? := env.getModuleIdxFor? name >>= (env.allImportedModuleNames[·.toNat]?)
+        module?.map (λ name => (toString name).startsWith pr) |>.getD false
+      | .none => true
+    if moduleAllow != args.invertFilter then
+      match toFilteredSymbol name info with
+      | .some x => x :: acc
+      | .none => acc
+    else
+      acc
+  IO.FS.writeFile args.filename $ String.join (names.map (· ++ "\n"))
+  return { nSymbols := names.length }
+
 def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult := do
   let env ← MonadEnv.getEnv
   let options := (← getMainState).options
@@ -120,8 +130,7 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
   let .some info := info?
     | throw $ .errorIndex s!"Symbol not found {args.name}"
   runCoreM do
-  let module? := env.getModuleIdxFor? name >>=
-    (λ idx => env.allImportedModuleNames[idx.toNat]?)
+  let module? := env.getModuleIdxFor? name >>= (env.allImportedModuleNames[·.toNat]?)
   let value? := match args.value?, info with
     | .some true, _ => info.value?
     | .some false, _ => .none
