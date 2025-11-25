@@ -163,6 +163,8 @@ structure EnvModuleReadResult where
 -- Print all symbols in environment
 structure EnvCatalog where
   filename : String
+  modulePrefix? : Option String := .none
+  invertFilter : Bool := false
   deriving FromJson
 structure EnvCatalogResult where
   nSymbols : Nat
