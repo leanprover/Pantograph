@@ -420,6 +420,26 @@ def frontend_process (args : Protocol.FrontendProcess) : EMainM Protocol.Fronten
     }
   return { units }
 
+def frontend_eval (args: Protocol.FrontendEval) : EMainM Protocol.FrontendEvalResult := do
+  let msgs ← liftTermElabM do
+      let expr ← match Parser.runParserCategory
+            (env := ← MonadEnv.getEnv)
+            (catName := `term)
+            (input := args.expr)
+            (fileName := ← getFileName) with
+        | .ok syn => pure syn
+        | .error error => throwError "Failed to parse: {error}"
+      let msgs <- liftCommandElabM do
+         let noMsgs := (<- get).messages.toArray.size
+         Lean.Elab.Command.elabEvalCore args.bang expr expr .none
+         let s' <- get
+         pure $ s'.messages.toArray.drop noMsgs
+      return msgs
+  let messages <- msgs.mapM (·.serialize)
+  return {
+     messages := messages
+  }
+
 end Frontend
 
 /-- Main loop command of the REPL -/
@@ -461,6 +481,7 @@ def execute (command : Protocol.Command) : MainM Json := do
   | "goal.print"    => run goal_print
   | "goal.save"     => run goal_save
   | "goal.load"     => run goal_load
+  | "frontend.eval"          => run frontend_eval
   | "frontend.process" => run frontend_process
   | "frontend.distil"  => run frontend_distil
   | "frontend.track"   => run frontend_track

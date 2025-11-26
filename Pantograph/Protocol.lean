@@ -428,6 +428,15 @@ structure FrontendProcessResult where
   units: List CompilationUnit
   deriving ToJson
 
+/-- Frontend eval expression -/
+structure FrontendEval where
+  expr: String
+  bang: Bool := .false
+  deriving FromJson
+structure FrontendEvalResult where
+  messages: Array Lean.SerialMessage
+  deriving ToJson
+
 /-- Frontend Process's side output going into a file -/
 structure FrontendDataUnit where
   invocations? : Option (List Protocol.InvokedTactic) := .none
