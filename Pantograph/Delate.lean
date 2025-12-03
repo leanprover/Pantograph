@@ -96,7 +96,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
 
     mvarId.withContext do
       let lctx ← MonadLCtx.getLCtx
-      if mvarDecl.lctx.any (λ decl => !lctx.contains decl.fvarId) then
+      if mvarDecl.lctx.any (!lctx.contains ·.fvarId) then
         let violations := mvarDecl.lctx.decls.foldl (λ acc decl? => match decl? with
           | .some decl => if lctx.contains decl.fvarId then acc else acc ++ [decl.fvarId.name]
           | .none => acc) []
@@ -158,8 +158,6 @@ the current goal.
 Since Lean 4 does not have an `Expr` constructor corresponding to delayed
 metavariables, any delayed metavariables must be recursively handled by this
 function to ensure that nested delayed metavariables can be properly processed.
-The caveat is this recursive call will lead to infinite recursion if a loop
-between metavariable assignment exists.
 
 This function ensures any metavariable in the result is either
 1. Delayed assigned with its pending mvar not assigned in any form
@@ -197,27 +195,27 @@ structure DelayedMVarInvocation where
 @[export pantograph_to_delayed_mvar_invocation_m]
 def toDelayedMVarInvocation (e: Expr): MetaM (Option DelayedMVarInvocation) := do
   let .mvar mvarId := e.getAppFn | return .none
-  let .some decl ← getDelayedMVarAssignment? mvarId | return .none
-  let mvarIdPending := decl.mvarIdPending
+  let .some { fvars, mvarIdPending } ← getDelayedMVarAssignment? mvarId | return .none
   let mvarDecl ← mvarIdPending.getDecl
   -- Print the function application e. See Lean's `withOverApp`
   let args := e.getAppArgs
 
-  assert! args.size ≥ decl.fvars.size
+  if args.size < fvars.size then
+    throwError "Not enough arguments to instantiate a delay assigned mvar. {args.size} < {fvars.size}. Expr: {← Meta.ppExpr e}"
   assert! !(← mvarIdPending.isAssigned)
   assert! !(← mvarIdPending.isDelayedAssigned)
-  let fvarArgMap: Std.HashMap FVarId Expr := Std.HashMap.ofList $ (decl.fvars.map (·.fvarId!) |>.zip args).toList
+  let fvarArgMap: Std.HashMap FVarId Expr := Std.HashMap.ofList $ (fvars.map (·.fvarId!) |>.zip args).toList
   let subst ← mvarDecl.lctx.foldlM (init := []) λ acc localDecl => do
     let fvarId := localDecl.fvarId
     let a := fvarArgMap[fvarId]?
     return acc ++ [(fvarId, a)]
 
-  assert! decl.fvars.all (λ fvar => mvarDecl.lctx.findFVar? fvar |>.isSome)
+  assert! fvars.all (λ fvar => mvarDecl.lctx.findFVar? fvar |>.isSome)
 
   return .some {
     mvarIdPending,
     args := subst.toArray,
-    tail := args.toList.drop decl.fvars.size |>.toArray,
+    tail := args.toList.drop fvars.size |>.toArray,
   }
 
 -- Condensed representation
