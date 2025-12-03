@@ -116,6 +116,26 @@ def test_matcher : TestT Elab.TermElabM Unit := do
   let e' ← instantiateAll e
   checkTrue "ok" <| ← Meta.isTypeCorrect e'
 
+def test_intro_delay_intro : TestT Elab.TermElabM Unit := do
+  let statement ← Elab.Term.elabTerm (← `(term|∀ (i : Nat), { f : Nat → Nat // ∀ (j : Nat), f i = j  })) .none
+  Meta.forallTelescope statement λ _fvars target => do
+  let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
+  let [cond, f] ← goal.applyConst `Subtype.mk | fail "Incorrect number of goals"
+  let (_fBinder, fBody) ← f.intro1
+  cond.withContext do
+    let opt ← toDelayedMVarInvocation (.mvar f)
+    checkTrue "condBody/?f" opt.isNone
+    let sexp ← serializeExpressionSexp (← instantiateAll $ ← cond.getType)
+    checkTrue "condBody/target" $ sexp.startsWith "(:forall j (:c Nat) ((:c Eq) (:c Nat) ((:lambda a (:c Nat) (:subst"
+  let (_condBinder, condBody) ← cond.intro1
+  condBody.withContext do
+    let opt ← toDelayedMVarInvocation (.mvar f)
+    checkTrue "condBody/?f" opt.isNone
+    let opt ← toDelayedMVarInvocation (.mvar fBody)
+    checkTrue "condBody/?fBody" opt.isNone
+    let sexp ← serializeExpressionSexp (← instantiateAll $ ← condBody.getType)
+    checkTrue "condBody/target" $ sexp.startsWith "((:c Eq) (:c Nat) ((:lambda a (:c Nat) (:subst"
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   [
     ("serializeName", do pure test_serializeName),
@@ -127,4 +147,5 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Projection Prod", test_projection_prod env),
     ("Projection Exists", test_projection_exists env),
     ("Matcher", runTestTermElabM env test_matcher),
+    ("intro delay intro", runTestTermElabM env test_intro_delay_intro)
   ]
