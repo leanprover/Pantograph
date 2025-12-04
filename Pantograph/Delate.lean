@@ -112,8 +112,11 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
             Array.zipWith (λ fvar assign => s!"{fvar.fvarId!.name} := {assign}") fvars args |>.toList
           trace[Pantograph.Delate]"MD ?{mvarId.name} := ?{mvarIdPending.name} [{substTableStr}]"
 
-        if args.size < fvars.size then
-          throwError "Not enough arguments to instantiate a delay assigned mvar. This is due to bad implementations of a tactic: {args.size} < {fvars.size}. Expr: {toString e}; Origin: {toString expr}"
+        let args ← if args.size < fvars.size then
+          trace[Pantograph.Delate] "Not enough arguments to instantiate a delay assigned mvar: {args.size} < {fvars.size}. Expr: {toString e}; Origin: {toString expr}"
+          pure $ args ++ fvars.drop args.size
+        else
+          pure args
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments Begin"
         let args ← args.mapM (self mvarId)
@@ -200,8 +203,11 @@ def toDelayedMVarInvocation (e: Expr): MetaM (Option DelayedMVarInvocation) := d
   -- Print the function application e. See Lean's `withOverApp`
   let args := e.getAppArgs
 
-  if args.size < fvars.size then
-    throwError "Not enough arguments to instantiate a delay assigned mvar. {args.size} < {fvars.size}. Expr: {← Meta.ppExpr e}"
+  let args := if args.size < fvars.size then
+    -- Pad the fvars
+    args ++ fvars.drop args.size
+  else
+    args
   assert! !(← mvarIdPending.isAssigned)
   assert! !(← mvarIdPending.isDelayedAssigned)
   let fvarArgMap: Std.HashMap FVarId Expr := Std.HashMap.ofList $ (fvars.map (·.fvarId!) |>.zip args).toList
