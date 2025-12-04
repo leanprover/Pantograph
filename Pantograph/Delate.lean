@@ -107,9 +107,9 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
     mvarId.withContext do
       let lctx ← MonadLCtx.getLCtx
       if mvarDecl.lctx.any (!lctx.contains ·.fvarId) then
-        let violations := mvarDecl.lctx.decls.foldl (λ acc decl? => match decl? with
+        let violations := mvarDecl.lctx.decls.foldl (init := []) λ acc => λ
           | .some decl => if lctx.contains decl.fvarId then acc else acc ++ [decl.fvarId.name]
-          | .none => acc) []
+          | .none => acc
         panic! s!"In the context of {mvarId.name}, there are local context variable violations: {violations}"
 
       if let .some assign ← getExprMVarAssignment? mvarId then
@@ -202,7 +202,7 @@ structure DelayedMVarInvocation where
 
 -- The pending mvar of any delayed assigned mvar must not be assigned in any way.
 @[export pantograph_to_delayed_mvar_invocation_m]
-def toDelayedMVarInvocation (e: Expr): MetaM (Option DelayedMVarInvocation) := do
+def toDelayedMVarInvocation (e : Expr) : MetaM (Option DelayedMVarInvocation) := do
   let .mvar mvarId := e.getAppFn | return .none
   let .some { fvars, mvarIdPending } ← getDelayedMVarAssignment? mvarId | return .none
   let mvarDecl ← mvarIdPending.getDecl
