@@ -24,6 +24,8 @@ protected def Info.stx? : Info → Option Syntax
   | .ofUserWidgetInfo     info => info.stx
   | .ofCustomInfo         info => info.stx
   | .ofFVarAliasInfo      _    => none
+  | .ofDocInfo            info    => info.stx
+  | .ofDocElabInfo        info    => info.stx
   | .ofFieldRedeclInfo    info => info.stx
   | .ofChoiceInfo         info => info.stx
   | .ofPartialTermInfo    info => info.stx
@@ -159,6 +161,8 @@ partial def InfoTree.toString (t : InfoTree) (ctx?: Option Elab.ContextInfo := .
       | .ofCustomInfo _ => pure "[custom]"
       | .ofFVarAliasInfo _ => pure "[fvar_alias]"
       | .ofFieldRedeclInfo _ => pure "[field_redecl]"
+      | .ofDocElabInfo _ => pure "[doc_elab]"
+      | .ofDocInfo _ => pure "[doc]"
       | .ofChoiceInfo _ => pure "[choice]"
       | .ofPartialTermInfo  _ => pure "[partial_term]"
       | .ofDelabTermInfo _ => pure "[delab_term]"
