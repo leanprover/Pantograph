@@ -77,6 +77,16 @@ def unfoldMatchers (expr : Expr) : CoreM Expr :=
     let mdata := KVMap.empty.insert `matcher (DataValue.ofName mapp.matcherName)
     return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
 
+def padArgs (args fvars : Array Expr) : MetaM (Array Expr) := do
+  if args.size ≥ fvars.size then
+    return args
+  let diff := fvars.size - args.size
+  let front := fvars.take diff
+  for fvar in front do
+    if (← fvar.fvarId!.findDecl?).isNone then
+      throwError s!"Nonexistent padded fvar: {fvar.fvarId!.name}"
+  return front ++ args
+
 partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM Expr :=
   withTraceNode `Pantograph.Delate (λ _ex => return m!":= {← Meta.ppExpr expr}") do
   let mut result ← Meta.transform (← instantiateMVars expr)
@@ -112,11 +122,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
             Array.zipWith (λ fvar assign => s!"{fvar.fvarId!.name} := {assign}") fvars args |>.toList
           trace[Pantograph.Delate]"MD ?{mvarId.name} := ?{mvarIdPending.name} [{substTableStr}]"
 
-        let args ← if args.size < fvars.size then
-          trace[Pantograph.Delate] "Not enough arguments to instantiate a delay assigned mvar: {args.size} < {fvars.size}. Expr: {toString e}; Origin: {toString expr}"
-          pure $ args ++ fvars.drop args.size
-        else
-          pure args
+        let args ← padArgs args fvars
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments Begin"
         let args ← args.mapM (self mvarId)
@@ -202,12 +208,7 @@ def toDelayedMVarInvocation (e: Expr): MetaM (Option DelayedMVarInvocation) := d
   let mvarDecl ← mvarIdPending.getDecl
   -- Print the function application e. See Lean's `withOverApp`
   let args := e.getAppArgs
-
-  let args := if args.size < fvars.size then
-    -- Pad the fvars
-    args ++ fvars.drop args.size
-  else
-    args
+  let args ← padArgs args fvars
   assert! !(← mvarIdPending.isAssigned)
   assert! !(← mvarIdPending.isDelayedAssigned)
   let fvarArgMap: Std.HashMap FVarId Expr := Std.HashMap.ofList $ (fvars.map (·.fvarId!) |>.zip args).toList
