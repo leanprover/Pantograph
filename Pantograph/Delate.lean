@@ -77,6 +77,16 @@ def unfoldMatchers (expr : Expr) : CoreM Expr :=
     let mdata := KVMap.empty.insert `matcher (DataValue.ofName mapp.matcherName)
     return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
 
+def padArgs (args fvars : Array Expr) : MetaM (Array Expr) := do
+  if args.size ≥ fvars.size then
+    return args
+  let diff := fvars.size - args.size
+  let front := fvars.take diff
+  for fvar in front do
+    if (← fvar.fvarId!.findDecl?).isNone then
+      throwError s!"Nonexistent padded fvar: {fvar.fvarId!.name}"
+  return front ++ args
+
 partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM Expr :=
   withTraceNode `Pantograph.Delate (λ _ex => return m!":= {← Meta.ppExpr expr}") do
   let mut result ← Meta.transform (← instantiateMVars expr)
@@ -96,10 +106,10 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
 
     mvarId.withContext do
       let lctx ← MonadLCtx.getLCtx
-      if mvarDecl.lctx.any (λ decl => !lctx.contains decl.fvarId) then
-        let violations := mvarDecl.lctx.decls.foldl (λ acc decl? => match decl? with
+      if mvarDecl.lctx.any (!lctx.contains ·.fvarId) then
+        let violations := mvarDecl.lctx.decls.foldl (init := []) λ acc => λ
           | .some decl => if lctx.contains decl.fvarId then acc else acc ++ [decl.fvarId.name]
-          | .none => acc) []
+          | .none => acc
         panic! s!"In the context of {mvarId.name}, there are local context variable violations: {violations}"
 
       if let .some assign ← getExprMVarAssignment? mvarId then
@@ -112,8 +122,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
             Array.zipWith (λ fvar assign => s!"{fvar.fvarId!.name} := {assign}") fvars args |>.toList
           trace[Pantograph.Delate]"MD ?{mvarId.name} := ?{mvarIdPending.name} [{substTableStr}]"
 
-        if args.size < fvars.size then
-          throwError "Not enough arguments to instantiate a delay assigned mvar. This is due to bad implementations of a tactic: {args.size} < {fvars.size}. Expr: {toString e}; Origin: {toString expr}"
+        let args ← padArgs args fvars
         if !args.isEmpty then
           trace[Pantograph.Delate] "─ Arguments Begin"
         let args ← args.mapM (self mvarId)
@@ -158,8 +167,6 @@ the current goal.
 Since Lean 4 does not have an `Expr` constructor corresponding to delayed
 metavariables, any delayed metavariables must be recursively handled by this
 function to ensure that nested delayed metavariables can be properly processed.
-The caveat is this recursive call will lead to infinite recursion if a loop
-between metavariable assignment exists.
 
 This function ensures any metavariable in the result is either
 1. Delayed assigned with its pending mvar not assigned in any form
@@ -195,29 +202,27 @@ structure DelayedMVarInvocation where
 
 -- The pending mvar of any delayed assigned mvar must not be assigned in any way.
 @[export pantograph_to_delayed_mvar_invocation_m]
-def toDelayedMVarInvocation (e: Expr): MetaM (Option DelayedMVarInvocation) := do
+def toDelayedMVarInvocation (e : Expr) : MetaM (Option DelayedMVarInvocation) := do
   let .mvar mvarId := e.getAppFn | return .none
-  let .some decl ← getDelayedMVarAssignment? mvarId | return .none
-  let mvarIdPending := decl.mvarIdPending
+  let .some { fvars, mvarIdPending } ← getDelayedMVarAssignment? mvarId | return .none
   let mvarDecl ← mvarIdPending.getDecl
   -- Print the function application e. See Lean's `withOverApp`
   let args := e.getAppArgs
-
-  assert! args.size ≥ decl.fvars.size
+  let args ← padArgs args fvars
   assert! !(← mvarIdPending.isAssigned)
   assert! !(← mvarIdPending.isDelayedAssigned)
-  let fvarArgMap: Std.HashMap FVarId Expr := Std.HashMap.ofList $ (decl.fvars.map (·.fvarId!) |>.zip args).toList
+  let fvarArgMap: Std.HashMap FVarId Expr := Std.HashMap.ofList $ (fvars.map (·.fvarId!) |>.zip args).toList
   let subst ← mvarDecl.lctx.foldlM (init := []) λ acc localDecl => do
     let fvarId := localDecl.fvarId
     let a := fvarArgMap[fvarId]?
     return acc ++ [(fvarId, a)]
 
-  assert! decl.fvars.all (λ fvar => mvarDecl.lctx.findFVar? fvar |>.isSome)
+  assert! fvars.all (λ fvar => mvarDecl.lctx.findFVar? fvar |>.isSome)
 
   return .some {
     mvarIdPending,
     args := subst.toArray,
-    tail := args.toList.drop decl.fvars.size |>.toArray,
+    tail := args.toList.drop fvars.size |>.toArray,
   }
 
 -- Condensed representation

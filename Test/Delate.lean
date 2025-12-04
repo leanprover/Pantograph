@@ -116,6 +116,39 @@ def test_matcher : TestT Elab.TermElabM Unit := do
   let e' ← instantiateAll e
   checkTrue "ok" <| ← Meta.isTypeCorrect e'
 
+def test_intro_delay_intro : TestT Elab.TermElabM Unit := do
+  let statement ← Elab.Term.elabTerm (← `(term|∀ (i : Nat), { f : Nat → Nat // ∀ (j : Nat), f i = j  })) .none
+  Meta.forallTelescope statement λ _fvars target => do
+  let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
+  let [cond, f] ← goal.applyConst `Subtype.mk | fail "Incorrect number of goals"
+  let (_fBinder, fBody) ← f.intro1
+  cond.withContext do
+    let opt ← toDelayedMVarInvocation (.mvar f)
+    checkTrue "condBody/?f" opt.isNone
+    let sexp ← serializeExpressionSexp (← instantiateAll $ ← cond.getType)
+    checkTrue "condBody/target" $ sexp.startsWith "(:forall j (:c Nat) ((:c Eq) (:c Nat) ((:lambda a (:c Nat) (:subst"
+  let (_condBinder, condBody) ← cond.intro1
+  condBody.withContext do
+    let opt ← toDelayedMVarInvocation (.mvar f)
+    checkTrue "condBody/?f" opt.isNone
+    let opt ← toDelayedMVarInvocation (.mvar fBody)
+    checkTrue "condBody/?fBody" opt.isNone
+    let sexp ← serializeExpressionSexp (← instantiateAll $ ← condBody.getType)
+    checkTrue "condBody/target" $ sexp.startsWith "((:c Eq) (:c Nat) ((:lambda a (:c Nat) (:subst"
+
+def test_doubly_nested_delayed_assigned : TestT Elab.TermElabM Unit := do
+  let statement ← Elab.Term.elabTerm (← `(term|∀ (i : Nat), { t : Prop // ∃ f : Nat → Nat → t, ∀ (j : Nat), f j j = f i i })) .none
+  Meta.forallTelescope statement λ _fvars target => do
+  let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
+  let [cond1, _t] ← goal.applyConst `Subtype.mk | fail "Incorrect number of goals [1]"
+  let [cond2, f] ← cond1.applyConst `Exists.intro | fail "Incorrect number of goals [2]"
+  let (_cond2F, cond2B) ← cond2.intro1
+  let (_f1F, f1B) ← f.intro1
+  let (_f12, _f2B) ← f1B.intro1
+  cond2B.withContext do
+    let sexp ← serializeExpressionSexp (← instantiateAll $ ← cond2B.getType)
+    checkTrue "cond2B/target" $ sexp.startsWith "((:c Eq)"
+
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   [
     ("serializeName", do pure test_serializeName),
@@ -127,4 +160,6 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Projection Prod", test_projection_prod env),
     ("Projection Exists", test_projection_exists env),
     ("Matcher", runTestTermElabM env test_matcher),
+    ("intro delay intro", runTestTermElabM env test_intro_delay_intro),
+    ("doubly_nested_delayed_assigned", runTestTermElabM env test_doubly_nested_delayed_assigned),
   ]
