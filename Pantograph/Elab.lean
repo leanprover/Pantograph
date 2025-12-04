@@ -40,7 +40,7 @@ def elabTerm (syn: Syntax) (expectedType? : Option Expr := .none): Elab.TermElab
   catch ex => return .error (← ex.toMessageData.toString)
 
 open Parser in
-def runParserCategory' (env : Environment) (catName : Name) (input : String) (fileName := "<input>") : Except String (Syntax × String.Pos) :=
+def runParserCategory' (env : Environment) (catName : Name) (input : String) (fileName := "<input>") : Except String (Syntax × String.Pos.Raw) :=
   let p := adaptCacheableContextFn ({ · with savedPos? := .some 0 }) (categoryParserFnImpl catName)
   let ictx := mkInputContext input fileName
   let s := p.run ictx { env, options := {} } (getTokenTable env) (mkParserState input)
@@ -50,7 +50,7 @@ def runParserCategory' (env : Environment) (catName : Name) (input : String) (fi
     Except.error (s.toErrorMsg ictx)
 
 open Parser in
-def runParser (env : Environment) (parser : Parser) (input : String) (fileName := "<input>") : Except String (Syntax × String.Pos) :=
+def runParser (env : Environment) (parser : Parser) (input : String) (fileName := "<input>") : Except String (Syntax × String.Pos.Raw) :=
   let pfn := (withPosition parser).fn
   let ictx := mkInputContext input fileName
   let s := pfn.run ictx { env, options := {} } (getTokenTable env) (mkParserState input)

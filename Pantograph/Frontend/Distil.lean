@@ -134,7 +134,7 @@ def collectSorrys (step: CompilationStep) (options : GoalCollectionOptions := {}
 
 structure AnnotatedGoalState where
   state : GoalState
-  srcBoundaries : List (String.Pos × String.Pos)
+  srcBoundaries : List (String.Pos.Raw × String.Pos.Raw)
 
 /--
 Since we cannot directly merge `MetavarContext`s, we have to get creative. This
