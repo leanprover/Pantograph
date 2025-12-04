@@ -236,6 +236,7 @@ def distilGoalStateFrom (head : Refactor.Command) (tail : List Refactor.Command)
     return { goalState }
 
 open Refactor in
+@[export pantograph_distil_search_targets_m]
 def distilSearchTargets (env : Environment) (source : String) (config : DistilConfig := {}) (fileName : String := defaultFileName)
   : IO (List DistilledSearchTarget) := do
   let (fContext, fState) ← createContextStateFromFile source fileName env {}
