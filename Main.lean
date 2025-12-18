@@ -16,7 +16,7 @@ def printImmediate (s : String) : IO Unit := do
 
 /-- Parse a command either in `{ "cmd": ..., "payload": ... }` form or `cmd { ... }` form. -/
 def parseCommand (s: String): Except String Command := do
-  match s.trim.get? 0 with
+  match String.Pos.Raw.get? s.trim 0 with
   | .some '{' =>
     -- Parse in Json mode
     Lean.fromJson? (← Lean.Json.parse s)
