@@ -100,7 +100,7 @@ def pushNewCommand (f : Format) : RefactorM Unit := do
         outContext with
         inputString := merged.source,
         fileMap := merged,
-        endPos := merged.source.endPos,
+        endPos := merged.source.rawEndPos,
         endPos_valid := by simp,
       }
     }
@@ -358,7 +358,7 @@ def runRefactor (env : Environment) (source : String)
     fContext.inputCtx with
     inputString := "",
     fileMap := "".toFileMap,
-    endPos := "".endPos,
+    endPos := "".rawEndPos,
     endPos_valid := by simp,
   }
   let parserState := {}
