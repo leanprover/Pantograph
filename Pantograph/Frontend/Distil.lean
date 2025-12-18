@@ -273,7 +273,7 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
     fContext.inputCtx with
     inputString := "",
     fileMap := "".toFileMap,
-    endPos := "".endPos,
+    endPos := "".rawEndPos,
     endPos_valid := by simp,
   }
   let parserState := {}

@@ -186,7 +186,7 @@ protected def GoalState.tryDraft (state: GoalState) (site : Site) (expr: String)
 -- Cancel the token after a timeout.
 @[export pantograph_run_cancel_token_with_timeout_m]
 def runCancelTokenWithTimeout (cancelToken : IO.CancelToken) (timeout : UInt32) : IO Unit := do
-  let _ ← EIO.asTask do
+  let _ ← IO.asTask do
     IO.sleep timeout
     cancelToken.set
   return ()
