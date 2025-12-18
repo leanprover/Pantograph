@@ -83,7 +83,7 @@ def fail { α } (s : String) : IO α :=
   throw <| .userError s
 
 def mergeFileMap (fm1 fm2 : FileMap) : FileMap :=
-  let bias := fm1.source.endPos.byteIdx + 1
+  let bias := fm1.source.rawEndPos.byteIdx + 1
   let mappedPos := fm2.positions.map λ pos => { byteIdx := pos.byteIdx + bias }
   {
     source := s!"{fm1.source}\n{fm2.source}",
@@ -100,7 +100,7 @@ def pushNewCommand (f : Format) : RefactorM Unit := do
         outContext with
         inputString := merged.source,
         fileMap := merged,
-        endPos := merged.source.endPos,
+        endPos := merged.source.rawEndPos,
         endPos_valid := by simp,
       }
     }
@@ -358,7 +358,7 @@ def runRefactor (env : Environment) (source : String)
     fContext.inputCtx with
     inputString := "",
     fileMap := "".toFileMap,
-    endPos := "".endPos,
+    endPos := "".rawEndPos,
     endPos_valid := by simp,
   }
   let parserState := {}

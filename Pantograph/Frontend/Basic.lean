@@ -44,7 +44,7 @@ structure CompilationStep where
   scope : Elab.Command.Scope
   fileName : String
   fileMap : FileMap
-  src : Substring
+  src : Substring.Raw
   stx : Syntax
   before : Environment
   after : Environment
@@ -131,7 +131,7 @@ partial def executeFrontend { m } [Monad m] [MonadLiftT FrontendM m]
   (f : CompilationStep → m Unit) : m Unit := do
   let (cmd, done) ← processOneCommand
   if done then
-    if cmd.src.isEmpty then
+    if cmd.src.str.isEmpty then
       return ()
     else
       f cmd
