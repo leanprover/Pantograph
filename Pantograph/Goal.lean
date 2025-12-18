@@ -746,7 +746,7 @@ protected def GoalState.tryTactic (state: GoalState) (site : Site) (tactic: Stri
     (fileName := ← getFileName) with
     | .ok (stx, pos) => pure (stx, pos)
     | .error error => return .parseError error
-  if pos != tactic.endPos then
+  if pos != tactic.rawEndPos then
     return .parseError "Cannot parse as one tactic block"
   let tacticM := Elab.Tactic.evalTacticSeq stx
   withCapturingError do

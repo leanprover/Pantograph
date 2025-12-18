@@ -44,7 +44,7 @@ structure CompilationStep where
   scope : Elab.Command.Scope
   fileName : String
   fileMap : FileMap
-  src : Substring
+  src : Substring.Raw
   stx : Syntax
   before : Environment
   after : Environment

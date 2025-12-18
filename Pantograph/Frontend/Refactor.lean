@@ -83,7 +83,7 @@ def fail { α } (s : String) : IO α :=
   throw <| .userError s
 
 def mergeFileMap (fm1 fm2 : FileMap) : FileMap :=
-  let bias := fm1.source.endPos.byteIdx + 1
+  let bias := fm1.source.rawEndPos.byteIdx + 1
   let mappedPos := fm2.positions.map λ pos => { byteIdx := pos.byteIdx + bias }
   {
     source := s!"{fm1.source}\n{fm2.source}",
