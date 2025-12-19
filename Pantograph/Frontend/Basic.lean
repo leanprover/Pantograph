@@ -131,7 +131,7 @@ partial def executeFrontend { m } [Monad m] [MonadLiftT FrontendM m]
   (f : CompilationStep → m Unit) : m Unit := do
   let (cmd, done) ← processOneCommand
   if done then
-    if cmd.src.str.isEmpty then
+    if cmd.src.startPos == cmd.src.stopPos then
       return ()
     else
       f cmd
