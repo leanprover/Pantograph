@@ -27,6 +27,29 @@ example : ∀ (n : Nat), n + 1 = Nat.succ n := by
   let errors ← runFrontend env sketch λ step => step.msgs.mapM (·.toString)
   checkEq "errors" errors [[], []]
 
+def collectTacticInvocations (env : Environment) (source : String) : IO (List (List Protocol.InvokedTactic)) := do
+  let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
+  let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => show FrontendM _ from do
+    collectTacticsFromCompilationStep step
+  m.run {} |>.run context |>.run' state
+
+private def test_collect_invocations_multiple : Test := λ env => do
+  let input := "
+example : ∀ (p q: Prop), p ∨ q → q ∨ p := by
+  intro p q h
+  cases h
+  . apply Or.inr
+    assumption
+  . apply Or.inl
+    assumption
+
+example : α → α := by
+  intro x
+  exact x
+  "
+  let invocations ← collectTacticInvocations env input
+  checkEq "numbers" (invocations.map (·.length)) [6, 2]
+
 def collectNewConstants (env : Environment) (source: String) : IO (List (List Name)) := do
   let (context, state) ← do Frontend.createContextStateFromFile source (env? := env)
   let m := show FrontendM _ from Frontend.mapCompilationSteps λ step => do
@@ -220,6 +243,7 @@ theorem mystery : False := z
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
     ("open", test_open),
+    ("collect_invocations_multiple", test_collect_invocations_multiple),
     ("collect_one_constant", test_collect_one_constant),
     ("collect_one_theorem", test_collect_one_theorem),
     ("collect_stub", test_collect_stub),

@@ -122,7 +122,7 @@ def processOneCommand: FrontendM (CompilationStep × Bool) := do
   let s' := (← get).commandState
   let after := s'.env
   let msgs := s'.messages.toList.drop s.messages.toList.length
-  let trees := s'.infoState.trees.drop s.infoState.trees.size
+  let trees := s'.infoState.trees.toList
   let { fileName, fileMap, .. }  := (← readThe Elab.Frontend.Context).inputCtx
   return ({ scope := s.scopes.head!, fileName, fileMap, src, stx, before, after, msgs, trees }, done)
 
