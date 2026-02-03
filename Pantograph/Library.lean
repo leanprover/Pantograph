@@ -10,12 +10,12 @@ open Lean
 /-- This is better than the default version since it handles `.` and doesn't
  crash the program when it fails. -/
 def setOptionFromString' (opts : Options) (entry : String) : ExceptT String IO Options := do
-  let ps := (entry.splitOn "=").map String.trim
+  let ps := (entry.splitOn "=").map String.trimAscii
   let [key, val] ← pure ps | throw "invalid configuration option entry, it must be of the form '<key> = <value>'"
   let key := key.toName
   let defValue ← getOptionDefaultValue key
   match defValue with
-  | DataValue.ofString _ => pure $ opts.setString key val
+  | DataValue.ofString _ => pure $ opts.setString key val.toString
   | DataValue.ofBool _   =>
     match val with
     | "true" => pure $ opts.setBool key true

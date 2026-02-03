@@ -79,7 +79,7 @@ def test_sexp_of_expr (env: Environment): IO LSpec.TestSeq := do
   let termElabM: Elab.TermElabM LSpec.TestSeq := entries.foldlM (λ suites (expr, target) => do
     let env ← MonadEnv.getEnv
     let testCaseName := target.take 10
-    let test := LSpec.check   testCaseName ((← serializeExpressionSexp expr) = target)
+    let test := LSpec.check testCaseName.toString ((← serializeExpressionSexp expr) = target)
     return LSpec.TestSeq.append suites test) LSpec.TestSeq.done
   runMetaMSeq env $ termElabM.run' (ctx := defaultElabContext)
 
