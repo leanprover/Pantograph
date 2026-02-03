@@ -16,18 +16,18 @@ def printImmediate (s : String) : IO Unit := do
 
 /-- Parse a command either in `{ "cmd": ..., "payload": ... }` form or `cmd { ... }` form. -/
 def parseCommand (s: String): Except String Command := do
-  match String.Pos.Raw.get? s.trim 0 with
+  match s.trimAscii.startPos.get? with
   | .some '{' =>
     -- Parse in Json mode
     Lean.fromJson? (← Lean.Json.parse s)
   | .some _ =>
     -- Parse in line mode
-    let offset := s.posOf ' ' |> s.offsetOfPos
-    if offset = s.length then
-      return { cmd := s.take offset, payload := Lean.Json.null }
+    let offset := s.find ' '
+    if offset = s.endPos then
+      return { cmd := s.sliceTo offset |>.toString, payload := Lean.Json.null }
     else
-      let payload ← s.drop offset |> Lean.Json.parse
-      return { cmd := s.take offset, payload := payload }
+      let payload ← (s.sliceFrom offset).toString |> Lean.Json.parse
+      return { cmd := (s.sliceTo offset).toString, payload := payload }
   | .none =>
     throw "Command is empty"
 
@@ -35,7 +35,7 @@ partial def loop : MainM Unit := do repeat do
   let state ← get
   let command ← (← IO.getStdin).getLine
   -- Halt the program if empty line is given
-  if command.trim.length = 0 then break
+  if command.trimAscii.isEmpty then break
   match parseCommand command with
   | .error error =>
     let error  := Lean.toJson ({ error := "command", desc := error }: InteractionError)
@@ -64,7 +64,7 @@ def main (args: List String): IO Unit := do
 
   -- Separate imports and options
   let (options, imports) := args.partition (·.startsWith "--")
-  let coreContext ← options.map (·.drop 2) |>.toArray |> Pantograph.createCoreContext
+  let coreContext ← options.map (·.drop 2 |>.toString) |>.toArray |> Pantograph.createCoreContext
   let env ← Lean.importModules
     (imports := imports.toArray.map ({ module := ·.toName }))
     (opts := {})
