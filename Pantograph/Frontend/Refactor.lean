@@ -2,7 +2,7 @@
 on one end and outputs compilation units on the other. -/
 import Pantograph.Frontend.Basic
 import Pantograph.Frontend.InfoTree
-import Pantograph.Delate
+import Pantograph.Delab
 
 open Lean
 

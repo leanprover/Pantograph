@@ -1,5 +1,5 @@
 import Pantograph.Goal
-import Pantograph.Delate
+import Pantograph.Delab
 import Test.Common
 
 namespace Pantograph.Test.Metavar
