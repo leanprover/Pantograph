@@ -1,8 +1,9 @@
 # Contributing
 
 A Lean development shell is provided in the Nix flake. Nix usage is optional.
-Any contribution has to pass the pre-commit hooks:
+Any contribution has to pass the pre-commit hooks, installable using either `prek` or `pre-commit`:
 ```sh
+prek install
 pre-commit install --install-hooks
 ```
 
@@ -38,4 +39,4 @@ When writing Lean code, follow the guidelines
 let .some result := function
   | fail "incorrect"
 ```
-- Each test should be pinpointed and devolatilized.
+- Each test should be pinpointed and as devolatilized as possible.
