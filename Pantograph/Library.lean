@@ -1,7 +1,7 @@
 import Pantograph.Environment
 import Pantograph.Goal
 import Pantograph.Protocol
-import Pantograph.Delate
+import Pantograph.Delab
 
 namespace Pantograph
 

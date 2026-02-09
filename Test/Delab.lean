@@ -1,9 +1,9 @@
-import Pantograph.Delate
+import Pantograph.Delab
 import Test.Common
 
 open Lean Pantograph
 
-namespace Pantograph.Test.Delate
+namespace Pantograph.Test.Delab
 
 deriving instance Repr, DecidableEq for Protocol.BoundExpression
 

@@ -3,7 +3,7 @@ Tests pertaining to goals with no interdependencies
 -/
 import LSpec
 import Pantograph.Goal
-import Pantograph.Delate
+import Pantograph.Delab
 import Test.Common
 
 namespace Pantograph.Test.Proofs

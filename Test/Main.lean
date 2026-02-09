@@ -1,4 +1,4 @@
-import Test.Delate
+import Test.Delab
 import Test.Environment
 import Test.Frontend
 import Test.Integration
@@ -58,7 +58,7 @@ def main (args: List String) := do
     ("Metavar", Metavar.suite),
     ("Parser", Parser.suite),
     ("Proofs", Proofs.suite),
-    ("Delate", Delate.suite),
+    ("Delab", Delab.suite),
     ("Serial", Serial.suite),
     ("Tactic/Assign", Tactic.Assign.suite),
     ("Tactic/Fragment", Tactic.Fragment.suite),

@@ -1,4 +1,4 @@
-import Pantograph.Delate
+import Pantograph.Delab
 import Pantograph.Elab
 import Pantograph.Environment
 import Pantograph.Frontend

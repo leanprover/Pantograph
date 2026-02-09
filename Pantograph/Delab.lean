@@ -626,4 +626,4 @@ protected def GoalState.diag (goalState: GoalState) (parent?: Option GoalState :
       | .none => true
 
 initialize
-  registerTraceClass `Pantograph.Delate
+  registerTraceClass `Pantograph.Delab
