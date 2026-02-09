@@ -2,7 +2,7 @@
   description = "Pantograph";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     lean4-nix.url = "github:lenianiva/lean4-nix";
   };
@@ -30,7 +30,7 @@
       }: let
         manifest = pkgs.lib.importJSON ./lake-manifest.json;
         manifest-lspec = builtins.head manifest.packages;
-        lean = lean4-nix.packages.${system}.lean;
+        lean = lean4-nix.packages.${system}.lean-bin;
         lspecLib = lean.buildLeanPackage {
           name = "LSpec";
           roots = ["LSpec"];
@@ -122,7 +122,7 @@
         formatter = pkgs.alejandra;
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            pkgs.pre-commit
+            pkgs.prek
             lean.lean-all
           ];
         };
