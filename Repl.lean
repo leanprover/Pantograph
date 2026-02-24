@@ -562,7 +562,7 @@ def execute (command : Protocol.Command) : MainM Json := do
       | throw $ .errorIndex s!"Invalid state index {args.stateId}"
     let srcGoalState? ← match args.srcStateId? with
       | .some id => do
-        let .some srcGoalState := state.goalStates[args.stateId]?
+        let .some srcGoalState := state.goalStates[id]?
           | throw $ .errorIndex s!"Invalid src state index {id}"
         pure $ .some srcGoalState
       | .none => pure .none
