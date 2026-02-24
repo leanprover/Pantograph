@@ -14,13 +14,13 @@ private def test_merge_file_map : Test := λ _env ↦ do
 set_option pp.explicit true
 open Nat in
 def f : Nat → Nat := id
-  ".trim
+  ".trimAscii.toString
   let src2 := "
 set_option pp.explicit true
 open Nat in
 def f : Nat → Nat :=
   id
-  ".trim
+  ".trimAscii.toString
   let filemap1 := s!"{src1}\n{src2}".toFileMap
   let filemap2 := Refactor.mergeFileMap src1.toFileMap src2.toFileMap
   checkEq "result" filemap1 filemap2
@@ -40,9 +40,9 @@ set_option pp.explicit true
 open Nat in
 def f : Nat → Nat :=
   id
-  ".trim
+  ".trimAscii.toString
   let result ← runRefactor env src
-  checkEq "result" result.trim expected
+  checkEq "result" result.trimAscii.toString expected
 
 private def test_simple : Test := λ env ↦ do
   let src := "
@@ -54,9 +54,9 @@ theorem mystery (n : Nat) : f n = n := sorry
 /-- S1  -/
 def f_composite : { f : Nat → Nat // ∀ (n : Nat), f n = n } :=
   sorry
-  ".trim
+  ".trimAscii.toString
   let result ← runRefactor env src
-  checkEq "result" result.trim expected
+  checkEq "result" result.trimAscii.toString expected
 
 private def test_invalid : Test := λ env ↦ do
   let src := "
@@ -81,9 +81,9 @@ def helper (n : Nat) : Nat :=
   n + 1
 def f_composite : { f : Nat → Nat // ∀ (n : Nat), f n = helper n } :=
   sorry
-  ".trim
+  ".trimAscii.toString
   let result ← runRefactor env src
-  checkEq "result" result.trim expected
+  checkEq "result" result.trimAscii.toString expected
 
 private def test_predicate : Test := λ env ↦ do
   let src := "
@@ -96,9 +96,9 @@ def q : (Nat → Nat) → Prop :=
   sorry
 def p_composite : { p : (Nat → Nat) → Prop // p Nat.succ } :=
   sorry
-  ".trim
+  ".trimAscii.toString
   let result ← runRefactor env src
-  checkEq "result" result.trim expected
+  checkEq "result" result.trimAscii.toString expected
 
 def suite (env : Environment): List (String × IO LSpec.TestSeq) :=
   let tests := [
