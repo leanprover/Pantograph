@@ -158,9 +158,9 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
   return result
   where
   self (mvarId : MVarId) (e : Expr) :=
-    withReader (MVarIdSet.insert · mvarId) $ instantiateDelayedMVarsInner e
+    withReader (MVarIdSet.insert · mvarId) $ Core.withIncRecDepth $ instantiateDelayedMVarsInner e
   self0 (e : Expr) :=
-    instantiateDelayedMVarsInner e
+    Core.withIncRecDepth $ instantiateDelayedMVarsInner e
 
 /--
 Force the instantiation of delayed metavariables even if they cannot be fully
