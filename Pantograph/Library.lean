@@ -15,21 +15,21 @@ def setOptionFromString' (opts : Options) (entry : String) : ExceptT String IO O
   let key := key.toName
   let defValue ← getOptionDefaultValue key
   match defValue with
-  | DataValue.ofString _ => pure $ opts.setString key val.toString
+  | DataValue.ofString _ => pure $ opts.set key val.toString
   | DataValue.ofBool _   =>
     match val with
     | "true" => pure $ opts.setBool key true
     | "false" => pure $ opts.setBool key false
     | _ => throw  s!"invalid Bool option value '{val}'"
-  | DataValue.ofName _   => pure $ opts.setName key val.toName
+  | DataValue.ofName _   => pure $ opts.set key val.toName
   | DataValue.ofNat _    =>
     match val.toNat? with
     | none   => throw s!"invalid Nat option value '{val}'"
-    | some v => pure $ opts.setNat key v
+    | some v => pure $ opts.set key v
   | DataValue.ofInt _    =>
     match val.toInt? with
     | none   => throw s!"invalid Int option value '{val}'"
-    | some v => pure $ opts.setInt key v
+    | some v => pure $ opts.set key v
   | DataValue.ofSyntax _ => throw s!"invalid Syntax option value"
 
 def runMetaM { α } (metaM: MetaM α): CoreM α :=
