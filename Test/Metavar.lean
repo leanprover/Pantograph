@@ -161,7 +161,7 @@ def test_m_couple_simp: TestM Unit := do
   --checkEq "(5 root)" rootStr "Nat.le_trans (of_eq_true (_proof_4✝ 2)) (of_eq_true (eq_true_of_decide (Eq.refl true)))"
   let unfoldedRoot ←  unfoldAuxLemmas root
   checkEq "(5 root)" (toString (← Lean.Meta.ppExpr unfoldedRoot))
-    "Nat.le_trans (of_eq_true (eq_true (Nat.le_refl 2))) (of_eq_true (eq_true_of_decide (Eq.refl true)))"
+    "Nat.le_trans (of_eq_true (eq_true (Std.le_refl 2))) (of_eq_true (eq_true_of_decide (Eq.refl true)))"
   return ()
 
 def test_proposition_generation: TestM Unit := do

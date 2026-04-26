@@ -118,7 +118,7 @@ example : (1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3 := by
   simp
 def test_tactic_timeout : Test := do
   step "goal.start" ({ expr := "(1 : Nat) + (2 * 3) = 1 + (4 - 3) + (6 - 4) + 3" }: Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.326".toName }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.373".toName }: Protocol.GoalStartResult)
   -- timeout of 10 milliseconds
   step "options.set" ({ timeout? := .some 10 } : Protocol.OptionsSet)
    ({ }: Protocol.OptionsSetResult)
@@ -183,15 +183,15 @@ def test_conv_calc : Test := do
   step "options.set" ({automaticMode? := .some false}: Protocol.OptionsSet)
    ({}: Protocol.OptionsSetResult)
   step "goal.start" ({ expr := "∀ (a b: Nat), (b = 2) -> 1 + a + 1 = a + b"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.152".toName }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.169".toName }: Protocol.GoalStartResult)
   let vars := #[
-    { name := "_uniq.153".toName, userName := `a, type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.156".toName, userName := `b, type? := .some { pp? := .some "Nat" }},
-    { name := "_uniq.159".toName, userName := `h, type? := .some { pp? := .some "b = 2" }},
+    { name := "_uniq.170".toName, userName := `a, type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.173".toName, userName := `b, type? := .some { pp? := .some "Nat" }},
+    { name := "_uniq.176".toName, userName := `h, type? := .some { pp? := .some "b = 2" }},
   ]
   let goal : Protocol.Goal := {
     vars,
-    name := "_uniq.160".toName,
+    name := "_uniq.177".toName,
     target := { pp? := "1 + a + 1 = a + b" },
   }
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro a b h" }: Protocol.GoalTactic)
@@ -200,13 +200,13 @@ def test_conv_calc : Test := do
    ({ nextStateId? := .some 2, goals? := #[{ goal with fragment := .calc }], }: Protocol.GoalTacticResult)
   let goalCalc : Protocol.Goal := {
     vars,
-    name := "_uniq.342".toName,
+    name := "_uniq.374".toName,
     userName? := .some `calc,
     target := { pp? := "1 + a + 1 = a + 1 + 1" },
   }
   let goalMain : Protocol.Goal := {
     vars,
-    name := "_uniq.356".toName,
+    name := "_uniq.388".toName,
     fragment := .calc,
     target := { pp? := "a + 1 + 1 = a + b" },
   }
@@ -216,7 +216,7 @@ def test_conv_calc : Test := do
     goalCalc with
     fragment := .conv,
     userName? := .none,
-    name := "_uniq.409".toName,
+    name := "_uniq.446".toName,
   }
   step "goal.tactic" ({ stateId := 3, mode? := .some "conv" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 4, goals? := #[goalConv], }: Protocol.GoalTacticResult)
@@ -305,9 +305,9 @@ def test_frontend_process_invocations : Test := do
 def test_frontend_process_import_open : Test := do
   let header := "import Init\nopen Nat\nuniverse u"
   let goal1: Protocol.Goal := {
-    name := "_uniq.64".toName,
+    name := "_uniq.81".toName,
     target := { pp? := .some "n + 1 = n.succ" },
-    vars := #[{ name := "_uniq.63".toName, userName := `n, type? := .some { pp? := .some "Nat" }}],
+    vars := #[{ name := "_uniq.80".toName, userName := `n, type? := .some { pp? := .some "Nat" }}],
   }
   step "frontend.process"
     ({
@@ -322,7 +322,7 @@ def test_frontend_process_import_open : Test := do
      ],
    }: Protocol.FrontendProcessResult)
   step "goal.start" ({ expr := "∀ (n : Nat), n + 1 = Nat.succ n"} : Protocol.GoalStart)
-   ({ stateId := 0, root := "_uniq.62".toName }: Protocol.GoalStartResult)
+   ({ stateId := 0, root := "_uniq.79".toName }: Protocol.GoalStartResult)
   step "goal.tactic" ({ stateId := 0, tactic? := .some "intro n" }: Protocol.GoalTactic)
    ({ nextStateId? := .some 1, goals? := #[goal1], }: Protocol.GoalTacticResult)
   step "goal.tactic" ({ stateId := 1, tactic? := .some "apply add_one" }: Protocol.GoalTactic)
@@ -344,7 +344,7 @@ def test_frontend_track : Test := do
          pos := ⟨1, 4⟩,
          endPos := .some ⟨1, 5⟩,
          severity := .warning,
-         data := "declaration uses 'sorry'"
+         data := "declaration uses `sorry`"
        }
      ],
      dstMessages := #[
@@ -385,9 +385,9 @@ def test_frontend_distil_multiple : Test := do
   let withSorry := "theorem mystery (p: Prop): p → p := sorry"
   let file := s!"{solved}{withSorry}"
   let goal1: Protocol.Goal := {
-    name := "_uniq.190".toName,
+    name := "_uniq.296".toName,
     target := { pp? := .some "p → p" },
-    vars := #[{ name := "_uniq.189".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
+    vars := #[{ name := "_uniq.295".toName, userName := `p, type? := .some { pp? := .some "Prop" }}],
   }
   step "frontend.distil"
     ({
