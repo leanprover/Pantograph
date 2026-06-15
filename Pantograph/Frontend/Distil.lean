@@ -136,6 +136,7 @@ structure AnnotatedGoalState where
   state : GoalState
   srcBoundaries : List (String.Pos.Raw × String.Pos.Raw)
 
+set_option compiler.ignoreBorrowAnnotation true in
 /--
 Since we cannot directly merge `MetavarContext`s, we have to get creative. This
 function duplicates frozen mvars in term and tactic info nodes, and add them to

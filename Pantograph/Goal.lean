@@ -76,6 +76,8 @@ structure GoalState where
 
 def throwNoGoals { m α } [Monad m] [MonadError m] : m α := throwError "no goals to be solved"
 
+set_option compiler.ignoreBorrowAnnotation true
+
 @[export pantograph_goal_state_create_m]
 protected def GoalState.create (expr: Expr): Elab.TermElabM GoalState := do
   -- May be necessary to immediately synthesise all metavariables if we need to leave the elaboration context.

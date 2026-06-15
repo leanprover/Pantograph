@@ -65,6 +65,7 @@ def createCoreContext (options : Array String) : IO Core.Context := do
 def createCoreState (env : Environment) : IO Core.State := do
   return { env }
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_parse_elab_type_m]
 def parseElabType (type : String) : Protocol.FallibleT Elab.TermElabM Expr := do
   let env ← MonadEnv.getEnv
@@ -75,6 +76,7 @@ def parseElabType (type : String) : Protocol.FallibleT Elab.TermElabM Expr := do
   | .error str => Protocol.throw $ errorI "elab" str
   | .ok expr => return (← instantiateMVars expr)
 
+set_option compiler.ignoreBorrowAnnotation true in
 /-- This must be a TermElabM since the parsed expr contains extra information -/
 @[export pantograph_parse_elab_expr_m]
 def parseElabExpr (expr : String) (expectedType? : Option String := .none) : Protocol.FallibleT Elab.TermElabM Expr := do
@@ -87,6 +89,7 @@ def parseElabExpr (expr : String) (expectedType? : Option String := .none) : Pro
   | .error str => Protocol.throw $ errorI "elab" str
   | .ok expr => return (← instantiateMVars expr)
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_expr_echo_m]
 def exprEcho (expr: String) (expectedType?: Option String := .none) (options: @&Protocol.Options := {}):
     Protocol.FallibleT Elab.TermElabM Protocol.ExprEchoResult := do
@@ -100,16 +103,19 @@ def exprEcho (expr: String) (expectedType?: Option String := .none) (options: @&
   catch exception =>
     Protocol.throw $ errorI "typing" (← exception.toMessageData.toString)
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_goal_start_expr_m]
 def goalStartExpr (expr: String) : Protocol.FallibleT Elab.TermElabM GoalState := do
   let t ← parseElabType expr
   Elab.Term.synthesizeSyntheticMVarsUsingDefault
   GoalState.create t
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_goal_serialize_m]
 def goalSerialize (state: GoalState) (options: @&Protocol.Options): CoreM (Array Protocol.Goal) :=
   runMetaM <| state.serializeGoals options
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_goal_print_m]
 def goalPrint (state: GoalState) (rootExpr: Bool) (parentExprs: Bool)
   (goals: Bool) (extraMVars : Array Name) (options: @&Protocol.Options)
@@ -150,6 +156,7 @@ def goalPrint (state: GoalState) (rootExpr: Bool) (parentExprs: Bool)
     rootHasMVar := rootExpr?.map (·.hasExprMVar) |>.getD false,
   }
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_goal_have_m]
 protected def GoalState.tryHave (state: GoalState) (site : Site) (binderName: Name) (type: String): Elab.TermElabM TacticResult := do
   let type ← match (← parseTermM type) with
@@ -168,6 +175,7 @@ protected def GoalState.tryLet (state : GoalState) (site : Site) (binderName : N
     | .ok syn => pure syn
     | .error error => return .parseError error
   state.tryTacticM site $ Tactic.evalLet binderName type
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_goal_try_define_m]
 protected def GoalState.tryDefine (state: GoalState) (site : Site) (binderName: Name) (expr: String): Elab.TermElabM TacticResult := do
   let expr ← match (← parseTermM expr) with
@@ -175,6 +183,7 @@ protected def GoalState.tryDefine (state: GoalState) (site : Site) (binderName: 
     | .error error => return .parseError error
   state.restoreElabM
   state.tryTacticM site $ Tactic.evalDefine binderName expr
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_goal_try_draft_m]
 protected def GoalState.tryDraft (state: GoalState) (site : Site) (expr: String): Elab.TermElabM TacticResult := do
   let expr ← match (← parseTermM expr) with
