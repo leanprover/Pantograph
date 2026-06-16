@@ -42,6 +42,8 @@ open Pantograph.Test
 def main (args: List String) := do
   let nameFilter? := args.head?
   Lean.initSearchPath (← Lean.findSysroot)
+  unsafe do
+    Lean.enableInitializersExecution
   let env_default : Lean.Environment ← Lean.importModules
     (imports := #[`Init])
     (opts := {})

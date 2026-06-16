@@ -34,6 +34,8 @@ def test_pickling_environment : TestM Unit := do
 
   let name := `mystery
   IO.FS.withTempFile λ _ envPicklePath => do
+  unsafe do
+    Lean.enableInitializersExecution
   let ((), _) ← runCoreM coreSrc do
     let type: Expr := .forallE `p (.sort 0) (.forallE `h (.bvar 0) (.bvar 1) .default) .default
     let value: Expr := .lam `p (.sort 0) (.lam `h (.bvar 0) (.bvar 0) .default) .default
