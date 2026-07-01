@@ -100,7 +100,7 @@ def checkEnvConflicts (src src' dst : Environment) : ExceptT String IO Environme
   for (name, dstInfo) in dstConstants do
     if dstInfo.type.hasSorry then
       throw s!"Definition type has sorry: {name}"
-    if dstInfo.value?.map Expr.hasSorry |>.getD false then
+    if (dstInfo.value? (allowOpaque := true)).map Expr.hasSorry |>.getD false then
       throw s!"Definition value has sorry: {name}"
     match srcConstants[name]? with
     | .some srcInfo =>

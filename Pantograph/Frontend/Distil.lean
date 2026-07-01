@@ -258,7 +258,7 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
           return false
         let name := decl.constants.toList.head!
         let info := (← getEnv).find? name |>.get!
-        let .some value := info.value? | return false
+        let .some value := info.value? (allowOpaque := true) | return false
         return value.hasSorry
       if !isSearchTarget then
         pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)

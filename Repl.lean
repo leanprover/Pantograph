@@ -132,9 +132,9 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
   runCoreM do
   let module? := env.getModuleIdxFor? name >>= (env.allImportedModuleNames[·.toNat]?)
   let value? := match args.value?, info with
-    | .some true, _ => info.value?
+    | .some true, _ => info.value? (allowOpaque := true)
     | .some false, _ => .none
-    | .none, .defnInfo _ => info.value?
+    | .none, .defnInfo _ => info.value? (allowOpaque := true)
     | .none, _ => .none
   let type ← unfoldAuxLemmas info.type
   let value? ← value?.mapM (λ v => unfoldAuxLemmas v)
