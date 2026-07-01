@@ -1,6 +1,6 @@
 import Pantograph.Goal
 import Pantograph.Delab
-import Test.Common
+import PantographTest.Common
 
 namespace Pantograph.Test.Metavar
 

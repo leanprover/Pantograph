@@ -1,13 +1,13 @@
-import Test.Delab
-import Test.Environment
-import Test.Frontend
-import Test.Integration
-import Test.Library
-import Test.Metavar
-import Test.Parser
-import Test.Proofs
-import Test.Serial
-import Test.Tactic
+import PantographTest.Delab
+import PantographTest.Environment
+import PantographTest.Frontend
+import PantographTest.Integration
+import PantographTest.Library
+import PantographTest.Metavar
+import PantographTest.Parser
+import PantographTest.Proofs
+import PantographTest.Serial
+import PantographTest.Tactic
 
 import LSpec
 

@@ -2,7 +2,7 @@ import Pantograph.Library
 import Pantograph.Serial
 
 import LSpec
-import Test.Common
+import PantographTest.Common
 
 open Lean
 

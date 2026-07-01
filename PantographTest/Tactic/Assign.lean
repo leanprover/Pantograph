@@ -1,7 +1,7 @@
 import Lean.Meta
 import Lean.Elab
 import LSpec
-import Test.Common
+import PantographTest.Common
 
 open Lean
 

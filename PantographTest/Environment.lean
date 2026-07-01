@@ -1,7 +1,7 @@
 import Pantograph.Delab
 import Pantograph.Environment
 import Repl
-import Test.Common
+import PantographTest.Common
 
 import LSpec
 

@@ -1,6 +1,6 @@
 import Pantograph.Frontend
 import Pantograph.Environment
-import Test.Common
+import PantographTest.Common
 
 open Lean Pantograph Frontend
 

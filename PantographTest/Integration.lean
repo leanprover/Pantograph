@@ -3,7 +3,7 @@
 import LSpec
 import Pantograph
 import Repl
-import Test.Common
+import PantographTest.Common
 
 namespace Pantograph.Test.Integration
 open Pantograph.Repl

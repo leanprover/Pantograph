@@ -1,5 +1,5 @@
 import Pantograph.Library
-import Test.Common
+import PantographTest.Common
 
 namespace Pantograph.Test.Library
 
