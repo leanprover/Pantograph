@@ -29,32 +29,46 @@ def runCoreM { α } (state : Core.State) (testCoreM : TestT CoreM α) : TestM (�
     return (a, state')
 
 def test_pickling_environment : TestM Unit := do
-  let coreSrc : Core.State := { env := ← getEnv }
-  let coreDst : Core.State := { env := ← getEnv }
+  let env0 ← getEnv
+  let coreSrc : Core.State := { env := env0 }
+  let coreDst : Core.State := { env := env0 }
 
   let name := `mystery
   IO.FS.withTempFile λ _ envPicklePath => do
+  IO.FS.removeFile envPicklePath
   unsafe do
     Lean.enableInitializersExecution
   let ((), _) ← runCoreM coreSrc do
     let type: Expr := .forallE `p (.sort 0) (.forallE `h (.bvar 0) (.bvar 1) .default) .default
     let value: Expr := .lam `p (.sort 0) (.lam `h (.bvar 0) (.bvar 0) .default) .default
-    let c := Declaration.defnDecl <| mkDefinitionValEx
+    let c := Declaration.thmDecl <| mkTheoremValEx
       (name := name)
       (levelParams := [])
       (type := type)
       (value := value)
-      (hints := mkReducibilityHintsRegularEx 1)
-      (safety := .safe)
       (all := [])
     addDecl c
+    if (← Core.getMessageLog).hasErrors then
+      let log ← Core.getMessageLog
+      IO.eprintln "has errors!"
+      log.forM λ msg => do
+        IO.eprintln s!"{← msg.toString}"
+    unless (← getEnv).find? name |>.isSome do
+      throwError s!"Could not add definition {name}"
     environmentPickle (← getEnv) envPicklePath
 
   let _ ← runCoreM coreDst do
-    let (env', _) ← environmentUnpickle envPicklePath
+    checkTrue "Path exists" (← envPicklePath.pathExists)
+    let (env', region) ← environmentUnpickle envPicklePath
+    if (← Core.getMessageLog).hasErrors then
+      let log ← Core.getMessageLog
+      IO.eprintln "has errors!"
+      log.forM λ msg => do
+        IO.eprintln s!"{← msg.toString}"
     checkTrue s!"Has symbol {name}" (env'.find? name).isSome
     let anotherName := `mystery2
     checkTrue s!"Doesn't have symbol {anotherName}" (env'.find? anotherName).isNone
+    unsafe do region.free
 
 def test_goal_state_simple : TestM Unit := do
   let coreSrc : Core.State := { env := ← getEnv }
@@ -69,11 +83,12 @@ def test_goal_state_simple : TestM Unit := do
     goalStatePickle state statePath
 
   let ((), _) ← runCoreM coreDst do
-    let (goalState, _) ← goalStateUnpickle statePath (← getEnv)
+    let (goalState, region) ← goalStateUnpickle statePath (← getEnv)
     let metaM : MetaM (List Expr) := do
       goalState.goals.mapM λ goal => goalState.withContext goal goal.getType
     let types ← metaM.run'
     checkTrue "Goals" $ types[0]!.equal type
+    unsafe do region.free
 
 def test_pickling_env_extensions : TestM Unit := do
   let coreSrc : Core.State := { env := ← getEnv }
@@ -93,9 +108,10 @@ def test_pickling_env_extensions : TestM Unit := do
     checkTrue "src has aux lemma" $ parentExpr.getUsedConstants.any isAuxLemma
     goalStatePickle state1 statePath
   let ((), _) ← runCoreM coreDst $ transformTestT runTermElabMInCore do
-    let (state1, _) ← goalStateUnpickle statePath (← getEnv)
+    let (state1, region) ← goalStateUnpickle statePath (← getEnv)
     let parentExpr := state1.parentExpr!
     checkTrue "dst has aux lemma" $ parentExpr.getUsedConstants.any isAuxLemma
+    unsafe do region.free
 
   return ()
 
