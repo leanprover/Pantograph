@@ -1,6 +1,6 @@
 import LSpec
 import Pantograph.Elab
-import Test.Common
+import PantographTest.Common
 
 open Lean
 namespace Pantograph.Test.Parser

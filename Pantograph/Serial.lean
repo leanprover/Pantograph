@@ -71,9 +71,10 @@ def resurrectEnvironment
   let env ← match background? with
     | .none => importModules imports {} 0 (loadExts := true)
     | .some env =>
-      assert! env.imports == imports
+      unless env.imports == imports do
+        throw $ IO.userError s!"Background imports: {env.imports} is different from environment imports: {imports}"
       pure env
-  env.replay (Std.HashMap.ofList constArray.toList)
+  return insertConstants env constArray
 
 /--
 Unpickle an `Environment` from disk.
@@ -88,7 +89,11 @@ there could be memory leaks.
 def environmentUnpickle (path : System.FilePath) (background? : Option Environment := .none)
   : IO (Environment × CompactedRegion) := unsafe do
   let (distilled, region) ← unpickle (Array Import × ConstArray) path
-  return (← resurrectEnvironment distilled background?, region)
+  try
+    return (← resurrectEnvironment distilled background?, region)
+  catch e =>
+    unsafe do region.free
+    throw e
 
 /-- `CoreM`'s state, with information irrelevant to pickling masked out -/
 structure CompactCoreState where

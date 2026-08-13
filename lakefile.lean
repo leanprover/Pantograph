@@ -26,11 +26,11 @@ lean_exe tomograph {
 
 require LSpec from git
   "https://github.com/argumentcomputer/LSpec.git" @ "db76512cd5266f0c576d561d8c69e2dc4890bea5"
-lean_lib Test {
+lean_lib PantographTest {
 }
 @[test_driver]
 lean_exe test {
-  root := `Test.Main
+  root := `PantographTest.Main
   -- Solves the native symbol not found problem
   supportInterpreter := true
 }

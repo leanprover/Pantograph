@@ -1,5 +1,5 @@
 import Pantograph.Tactic.Prograde
-import Test.Common
+import PantographTest.Common
 
 open Lean
 

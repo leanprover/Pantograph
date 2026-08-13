@@ -1,5 +1,5 @@
 import Pantograph.Goal
-import Test.Common
+import PantographTest.Common
 
 open Lean
 

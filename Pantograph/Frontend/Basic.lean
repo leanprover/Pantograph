@@ -106,6 +106,7 @@ def processCommand : FrontendM Bool := do
     elabCommandAtFrontend cmd
     pure (Parser.isTerminalCommand cmd)
 
+set_option compiler.ignoreBorrowAnnotation true in
 /--
 Process one command, returning a `CompilationStep` and
 `done : Bool`, indicating whether this was the last command.

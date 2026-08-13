@@ -1,8 +1,6 @@
 import Pantograph.Library
 import Pantograph.Serial
-
-import LSpec
-import Test.Common
+import PantographTest.Common
 
 open Lean
 
@@ -29,30 +27,37 @@ def runCoreM { α } (state : Core.State) (testCoreM : TestT CoreM α) : TestM (�
     return (a, state')
 
 def test_pickling_environment : TestM Unit := do
-  let coreSrc : Core.State := { env := ← getEnv }
-  let coreDst : Core.State := { env := ← getEnv }
+  let env0 ← getEnv
+  let coreSrc : Core.State := { env := env0 }
+  let coreDst : Core.State := { env := env0 }
 
   let name := `mystery
   IO.FS.withTempFile λ _ envPicklePath => do
+  IO.FS.removeFile envPicklePath
+  unsafe do
+    Lean.enableInitializersExecution
   let ((), _) ← runCoreM coreSrc do
     let type: Expr := .forallE `p (.sort 0) (.forallE `h (.bvar 0) (.bvar 1) .default) .default
     let value: Expr := .lam `p (.sort 0) (.lam `h (.bvar 0) (.bvar 0) .default) .default
-    let c := Declaration.defnDecl <| mkDefinitionValEx
+    let c := Declaration.thmDecl <| mkTheoremValEx
       (name := name)
       (levelParams := [])
       (type := type)
       (value := value)
-      (hints := mkReducibilityHintsRegularEx 1)
-      (safety := .safe)
       (all := [])
     addDecl c
-    environmentPickle (← getEnv) envPicklePath
+    unless (← getEnv).contains name do
+      throwError s!"Could not add definition {name}"
+    environmentPickle (← getEnv) envPicklePath (.some env0)
 
   let _ ← runCoreM coreDst do
-    let (env', _) ← environmentUnpickle envPicklePath
-    checkTrue s!"Has symbol {name}" (env'.find? name).isSome
+    checkTrue "Path exists" (← envPicklePath.pathExists)
+    let (env', region) ← environmentUnpickle envPicklePath (.some env0)
+    checkEq "Constant count" (env0.constants.toList.length + 1) env'.constants.toList.length
+    checkTrue s!"Has symbol {name}" $ env'.contains name
     let anotherName := `mystery2
-    checkTrue s!"Doesn't have symbol {anotherName}" (env'.find? anotherName).isNone
+    checkFalse s!"Doesn't have symbol {anotherName}" $ env'.contains anotherName
+    unsafe do region.free
 
 def test_goal_state_simple : TestM Unit := do
   let coreSrc : Core.State := { env := ← getEnv }
@@ -67,11 +72,12 @@ def test_goal_state_simple : TestM Unit := do
     goalStatePickle state statePath
 
   let ((), _) ← runCoreM coreDst do
-    let (goalState, _) ← goalStateUnpickle statePath (← getEnv)
+    let (goalState, region) ← goalStateUnpickle statePath (← getEnv)
     let metaM : MetaM (List Expr) := do
       goalState.goals.mapM λ goal => goalState.withContext goal goal.getType
     let types ← metaM.run'
     checkTrue "Goals" $ types[0]!.equal type
+    unsafe do region.free
 
 def test_pickling_env_extensions : TestM Unit := do
   let coreSrc : Core.State := { env := ← getEnv }
@@ -91,9 +97,10 @@ def test_pickling_env_extensions : TestM Unit := do
     checkTrue "src has aux lemma" $ parentExpr.getUsedConstants.any isAuxLemma
     goalStatePickle state1 statePath
   let ((), _) ← runCoreM coreDst $ transformTestT runTermElabMInCore do
-    let (state1, _) ← goalStateUnpickle statePath (← getEnv)
+    let (state1, region) ← goalStateUnpickle statePath (← getEnv)
     let parentExpr := state1.parentExpr!
     checkTrue "dst has aux lemma" $ parentExpr.getUsedConstants.any isAuxLemma
+    unsafe do region.free
 
   return ()
 

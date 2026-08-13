@@ -136,6 +136,7 @@ structure AnnotatedGoalState where
   state : GoalState
   srcBoundaries : List (String.Pos.Raw × String.Pos.Raw)
 
+set_option compiler.ignoreBorrowAnnotation true in
 /--
 Since we cannot directly merge `MetavarContext`s, we have to get creative. This
 function duplicates frozen mvars in term and tactic info nodes, and add them to
@@ -257,7 +258,7 @@ def distilSearchTargets (env : Environment) (source : String) (config : DistilCo
           return false
         let name := decl.constants.toList.head!
         let info := (← getEnv).find? name |>.get!
-        let .some value := info.value? | return false
+        let .some value := info.value? (allowOpaque := true) | return false
         return value.hasSorry
       if !isSearchTarget then
         pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)

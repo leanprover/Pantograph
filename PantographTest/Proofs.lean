@@ -4,7 +4,7 @@ Tests pertaining to goals with no interdependencies
 import LSpec
 import Pantograph.Goal
 import Pantograph.Delab
-import Test.Common
+import PantographTest.Common
 
 namespace Pantograph.Test.Proofs
 open Pantograph

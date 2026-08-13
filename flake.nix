@@ -43,7 +43,7 @@
           (fileFilter (file: file.hasExt "lean") ./Pantograph)
         ];
         set-test = unions [
-          (fileFilter (file: file.hasExt "lean") ./Test)
+          (fileFilter (file: file.hasExt "lean") ./PantographTest)
         ];
         src-project = toSource {
           root = src;
@@ -92,11 +92,11 @@
           src = src-tomograph;
         };
         test = lean.buildLeanPackage {
-          name = "Test";
+          name = "PantographTest";
           # NOTE: The src directory must be ./. since that is where the import
           # root begins (e.g. `import Test.Environment` and not `import
           # Environment`) and thats where `lakefile.lean` resides.
-          roots = ["Test.Main"];
+          roots = ["PantographTest.Main"];
           deps = [lspecLib repl];
           src = src-test;
         };
@@ -116,7 +116,7 @@
               buildInputs = [test.executable lean.lean-all];
             } ''
               #export LEAN_SRC_PATH="${./.}"
-              ${test.executable}/bin/test > $out
+              ${test.executable}/bin/pantographtest > $out
             '';
         };
         formatter = pkgs.alejandra;

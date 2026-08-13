@@ -1,5 +1,5 @@
 import Pantograph.Frontend
-import Test.Common
+import PantographTest.Common
 
 open Lean Pantograph Frontend
 
@@ -163,8 +163,9 @@ private def test_distil_simple : Test := do
 set_option pp.analyze true
 theorem mystery : ∀ (p q : Prop), p ∨ q → q ∨ p := sorry
   "
-  let [_dst@{ goalState := state }] ← distilSearchTargets (← getEnv) input
-    | fail "Incorrect number of search states"
+  let targets ← distilSearchTargets (← getEnv) input
+  let [_dst@{ goalState := state }] := targets
+    | fail s!"Incorrect number of search states ({targets.length})"
   let .success state _ ← (state.tryTactic .unfocus "intro p q").run' (ctx := defaultElabContext)
     | fail "`intro` failed"
   checkEq "goals" state.goals.length 1

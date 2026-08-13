@@ -63,10 +63,12 @@ def exprProjToApp (env : Environment) (e : Expr) : Expr :=
       (List.range numFields)
     mkAppN callee (typeArgs ++ [motive, major, induct]).toArray
 
+set_option compiler.ignoreBorrowAnnotation true in
 /-- Unfold all lemmas created by `Lean.Meta.mkAuxLemma`. These end in `_auxLemma.nn` where `nn` is a number. -/
 @[export pantograph_unfold_aux_lemmas_m]
 def unfoldAuxLemmas (e : Expr) : CoreM Expr := do
-  Meta.deltaExpand e isAuxLemma
+  Meta.deltaExpand e isAuxLemma (allowOpaque := true)
+set_option compiler.ignoreBorrowAnnotation true in
 /-- Unfold all matcher applications -/
 @[export pantograph_unfold_matchers_m]
 def unfoldMatchers (expr : Expr) : CoreM Expr :=
@@ -178,6 +180,7 @@ This function ensures any metavariable in the result is either
 def instantiateDelayedMVars (expr : Expr) : MetaM Expr :=
   instantiateDelayedMVarsInner expr |>.run {}
 
+set_option compiler.ignoreBorrowAnnotation true in
 /--
 Convert an expression to an equivalent form with
 1. No nested delayed assigned mvars
@@ -204,6 +207,7 @@ structure DelayedMVarInvocation where
   tail : Array Expr
 
 -- The pending mvar of any delayed assigned mvar must not be assigned in any way.
+set_option compiler.ignoreBorrowAnnotation true in
 @[export pantograph_to_delayed_mvar_invocation_m]
 def toDelayedMVarInvocation (e : Expr) : MetaM (Option DelayedMVarInvocation) := do
   let .mvar mvarId := e.getAppFn | return .none
@@ -558,6 +562,7 @@ protected def GoalState.serializeGoals
       pure { serializedGoal with fragment }
     | .none => throwError s!"Metavariable does not exist in context {goal.name}"
 
+set_option compiler.ignoreBorrowAnnotation true in
 /-- Print the metavariables in a readable format -/
 @[export pantograph_goal_state_diag_m]
 protected def GoalState.diag (goalState: GoalState) (parent?: Option GoalState := .none) (options: Protocol.GoalDiag := {}): CoreM String := do

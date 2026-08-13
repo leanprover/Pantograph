@@ -1,6 +1,6 @@
 import Pantograph.Goal
 import Pantograph.Delab
-import Test.Common
+import PantographTest.Common
 
 namespace Pantograph.Test.Metavar
 
@@ -160,6 +160,7 @@ def test_m_couple_simp: TestM Unit := do
   let rootStr: String := toString (← Lean.Meta.ppExpr root)
   --checkEq "(5 root)" rootStr "Nat.le_trans (of_eq_true (_proof_4✝ 2)) (of_eq_true (eq_true_of_decide (Eq.refl true)))"
   let unfoldedRoot ←  unfoldAuxLemmas root
+  checkFalse "root does not have aux lemma" $ unfoldedRoot.getUsedConstants.any isAuxLemma
   checkEq "(5 root)" (toString (← Lean.Meta.ppExpr unfoldedRoot))
     "Nat.le_trans (of_eq_true (eq_true (Std.le_refl 2))) (of_eq_true (eq_true_of_decide (Eq.refl true)))"
   return ()
@@ -304,6 +305,14 @@ def test_restore_ngen : TestM Unit := do
   let .some root := state.rootExpr? | fail "Root expression must exist"
   checkTrue "root has aux lemma" $ root.getUsedConstants.any isAuxLemma
   checkEq "(root expression)" (toString $ ← Meta.ppExpr root) "⟨_proof_1, _proof_2⟩"
+  for c in root.getUsedConstants do
+    unless isAuxLemma c do
+      continue
+    let .some decl := (← getEnv).find? c | continue
+    checkTrue s!"Auxiliary decl {c} has value" $ decl.hasValue (allowOpaque := true)
+
+  let root ← unfoldAuxLemmas root
+  checkEq "(root unfold)" (toString $ ← Meta.ppExpr root) "⟨sorry, sorry⟩"
 
 /-- Test merger when both branches have new aux lemmas -/
 def test_replay_environment : TestM Unit := do
@@ -334,7 +343,13 @@ def test_replay_environment : TestM Unit := do
   Meta.check root
   checkTrue "root has aux lemma" $ root.getUsedConstants.any isAuxLemma
   checkEq "(root)" (toString $ ← Meta.ppExpr root) "⟨_proof_2, _proof_1⟩"
+  for c in root.getUsedConstants do
+    unless isAuxLemma c do
+      continue
+    let .some decl := (← getEnv).find? c | continue
+    checkTrue s!"Auxiliary decl {c} has value" $ decl.hasValue (allowOpaque := true)
   let root ← unfoldAuxLemmas root
+  Meta.check root
   checkEq "(root unfold)" (toString $ ← Meta.ppExpr root) "⟨sorry, sorry⟩"
 
 def test_subsume_fail : TestM Unit := do

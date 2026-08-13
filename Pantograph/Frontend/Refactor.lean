@@ -148,7 +148,7 @@ def Command.runCoreM { α } (command : Command) (c : CoreM α) : RefactorM α :=
 def constantDependencies (env : Environment) (name : Name) : NameSet :=
   let const := env.find? name |>.get!
   let s := const.type.getUsedConstantsAsSet
-  let s := match const.value? with
+  let s := match const.value? (allowOpaque := true) with
     | .some v => s.append v.getUsedConstantsAsSet
     | .none => s
   s
@@ -209,7 +209,7 @@ def distilSearchTarget { α } (head : Command) (tail : List Command) (f : (Expr 
       let env := head.state.env
       let name := head.constants.toList.head!
       let info := env.find? name |>.get!
-      let .some value := info.value?
+      let .some value := info.value? (allowOpaque := true)
         | throwError s!"Constant has no value: {name}"
       return (name, ← normalize info.type, ← normalize value)
   let companions ← tail.mapM λ command => command.runCommandElabM do
@@ -220,7 +220,7 @@ def distilSearchTarget { α } (head : Command) (tail : List Command) (f : (Expr 
       let type ← normalize info.type
       let c ← mkConstWithLevelParams headName
       let type ← Meta.kabstract type c
-      let .some value := info.value?
+      let .some value := info.value? (allowOpaque := true)
         | throwError s!"Constant has no value: {name}"
       -- Normalization strips away matchers.
       let value ← normalize value
@@ -318,7 +318,7 @@ def collectNextCommand : RefactorM Unit := do
       return false
     let name := decl.constants.toList.head!
     let info := (← getEnv).find? name |>.get!
-    let .some value := info.value? | return false
+    let .some value := info.value? (allowOpaque := true) | return false
     return value.hasSorry
   if !isSearchTarget then
     pushNewCommand' (⟨decl.stx⟩ : Syntax.Command)
