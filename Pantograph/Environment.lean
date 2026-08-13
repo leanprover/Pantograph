@@ -65,6 +65,13 @@ def toFilteredSymbol (n: Lean.Name) (info: Lean.ConstantInfo): Option String :=
 abbrev ConstArray := Array (Name × ConstantInfo)
 abbrev DistilledEnvironment := Array Import × ConstArray
 
+/-- HACK: Use private backdoor function to add the decl. Skip kernel checks -/
+@[extern "lake_environment_add"]
+private opaque environmentAdd (env : Environment) (c : ConstantInfo) : Environment
+
+def insertConstants (env : Environment) (a : ConstArray) : Environment :=
+  a.foldl (init := env) λ acc (_n, info) => environmentAdd acc info
+
 def envDiff (src dst : Environment) : ConstArray :=
   dst.constants.map₂.foldl (init := #[]) λ acc name info =>
     if src.contains name then
@@ -166,7 +173,7 @@ def replayConstantsRenaming (constants : Std.HashMap Name ConstantInfo) : CoreM 
       return .done (.const n' levels)
     | e =>
       return .continue e
-  let constants ← constants.foldM (init := .emptyWithCapacity constants.size) λ acc name info => do
+  let constants ← constants.foldM (init := Std.HashMap.emptyWithCapacity constants.size) λ acc name info => do
     let info' ← match info with
       | .axiomInfo val@{ name, type, .. } =>
         pure <| .axiomInfo {
@@ -224,6 +231,6 @@ def replayConstantsRenaming (constants : Std.HashMap Name ConstantInfo) : CoreM 
           all := all.map λ n => nameMap.getD n n,
         }
     return acc.insert name info'
-  let env' ← (← getEnv).replay constants
+  let env' := insertConstants (← getEnv) constants.toArray
   setEnv env'
   return nameMap

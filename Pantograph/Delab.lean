@@ -67,7 +67,7 @@ set_option compiler.ignoreBorrowAnnotation true in
 /-- Unfold all lemmas created by `Lean.Meta.mkAuxLemma`. These end in `_auxLemma.nn` where `nn` is a number. -/
 @[export pantograph_unfold_aux_lemmas_m]
 def unfoldAuxLemmas (e : Expr) : CoreM Expr := do
-  Meta.deltaExpand e isAuxLemma
+  Meta.deltaExpand e isAuxLemma (allowOpaque := true)
 set_option compiler.ignoreBorrowAnnotation true in
 /-- Unfold all matcher applications -/
 @[export pantograph_unfold_matchers_m]

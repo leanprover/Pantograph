@@ -1,7 +1,5 @@
 import Pantograph.Library
 import Pantograph.Serial
-
-import LSpec
 import PantographTest.Common
 
 open Lean
@@ -48,26 +46,17 @@ def test_pickling_environment : TestM Unit := do
       (value := value)
       (all := [])
     addDecl c
-    if (← Core.getMessageLog).hasErrors then
-      let log ← Core.getMessageLog
-      IO.eprintln "has errors!"
-      log.forM λ msg => do
-        IO.eprintln s!"{← msg.toString}"
-    unless (← getEnv).find? name |>.isSome do
+    unless (← getEnv).contains name do
       throwError s!"Could not add definition {name}"
-    environmentPickle (← getEnv) envPicklePath
+    environmentPickle (← getEnv) envPicklePath (.some env0)
 
   let _ ← runCoreM coreDst do
     checkTrue "Path exists" (← envPicklePath.pathExists)
-    let (env', region) ← environmentUnpickle envPicklePath
-    if (← Core.getMessageLog).hasErrors then
-      let log ← Core.getMessageLog
-      IO.eprintln "has errors!"
-      log.forM λ msg => do
-        IO.eprintln s!"{← msg.toString}"
-    checkTrue s!"Has symbol {name}" (env'.find? name).isSome
+    let (env', region) ← environmentUnpickle envPicklePath (.some env0)
+    checkEq "Constant count" (env0.constants.toList.length + 1) env'.constants.toList.length
+    checkTrue s!"Has symbol {name}" $ env'.contains name
     let anotherName := `mystery2
-    checkTrue s!"Doesn't have symbol {anotherName}" (env'.find? anotherName).isNone
+    checkFalse s!"Doesn't have symbol {anotherName}" $ env'.contains anotherName
     unsafe do region.free
 
 def test_goal_state_simple : TestM Unit := do
