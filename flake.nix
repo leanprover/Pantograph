@@ -30,7 +30,16 @@
       }: let
         manifest = pkgs.lib.importJSON ./lake-manifest.json;
         manifest-lspec = builtins.head manifest.packages;
-        lean = lean4-nix.packages.${system}.lean-bin;
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            (lean4-nix.readToolchainFile {
+              toolchain = ./lean-toolchain;
+              binary = system != "aarch64-darwin";
+            })
+          ];
+        };
+        lean = pkgs.lean;
         lspecLib = lean.buildLeanPackage {
           name = "LSpec";
           roots = ["LSpec"];
