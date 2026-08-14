@@ -293,8 +293,8 @@ protected def GoalState.replay (dst : GoalState) (src src' : GoalState) : CoreM 
   let mctx := {
     mctx with
     mvarCounter := mctx.mvarCounter + (src'.mctx.mvarCounter - src.mctx.mvarCounter),
-    lDepth := src'.mctx.lDepth.foldl (init := mctx.lDepth) λ acc lmvarId@{ name } depth =>
-      if src.mctx.lDepth.contains lmvarId then
+    lDecls := src'.mctx.lDecls.foldl (init := mctx.lDecls) λ acc lmvarId@{ name } depth =>
+      if src.mctx.lDecls.contains lmvarId then
         acc
       else
         acc.insert ⟨mapId name⟩ depth
