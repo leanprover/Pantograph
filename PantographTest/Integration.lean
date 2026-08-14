@@ -161,7 +161,7 @@ def test_automatic_mode (automatic: Bool): Test := do
   }
   let goal3l: Protocol.Goal := {
     name := "_uniq.76".toName,
-    userName? := `inl.h,
+    userName? := `inl,
     target := { pp? := .some "p" },
     vars := varsPQ ++ #[
       { name := "_uniq.45".toName, userName := h', type? := .some { pp? := .some "p" }, isInaccessible := true}
