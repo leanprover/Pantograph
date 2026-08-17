@@ -104,7 +104,7 @@ protected def Fragment.step (fragment : Fragment) (goal : MVarId) (s : String) (
       (catName := `term)
       (input := s)
       (fileName := ← getFileName) | throwError s!"Failed to parse calc element {s}"
-    let `(term|$pred) := stx
+    let pred : Term := ⟨stx⟩
     let decl ← goal.getDecl
     let target ← instantiateMVars decl.type
     let tag := decl.userName

@@ -102,7 +102,7 @@ def test_define_proof : TestT Elab.TermElabM Unit := do
 
   addTest $ LSpec.check "(3 root)" state3.rootExpr?.isSome
 
-def fun_define_root_expr: ∀ (p: Prop), PProd (Nat → p) Unit → p := by
+theorem fun_define_root_expr: ∀ (p: Prop), PProd (Nat → p) Unit → p := by
   intro p x
   apply x.fst
   exact 5
