@@ -131,7 +131,7 @@ def env_inspect (args : Protocol.EnvInspect) : EMainM Protocol.EnvInspectResult 
     | throw $ .errorIndex s!"Symbol not found {args.name}"
   runCoreM do
   let module? := env.getModuleIdxFor? name >>= (env.allImportedModuleNames[·.toNat]?)
-  let value? := match args.value?, info with
+  let value? : Option Expr := match args.value?, info with
     | .some true, _ => info.value? (allowOpaque := true)
     | .some false, _ => .none
     | .none, .defnInfo _ => info.value? (allowOpaque := true)
@@ -377,7 +377,7 @@ def frontend_process (args : Protocol.FrontendProcess) : EMainM Protocol.Fronten
   let frontendM: Frontend.FrontendM (List CompilationUnit) :=
     Frontend.mapCompilationSteps λ step => do
     let boundary := (step.src.startPos.byteIdx, step.src.stopPos.byteIdx)
-    let invocations: Option (List Protocol.InvokedTactic) ← if args.invocations?.isSome then
+    let invocations : List Protocol.InvokedTactic ← if args.invocations?.isSome then
         Frontend.collectTacticsFromCompilationStep step
       else
         pure []
@@ -538,7 +538,7 @@ def execute (command : Protocol.Command) : MainM Json := do
     let state ← getMainState
     let .some target := state.goalStates[args.target]?
       | throw $ .errorIndex s!"Invalid state index {args.target}"
-    let nextGoalState? : GoalState  ← match args.branch?, args.goals? with
+    let nextGoalState? : Except String GoalState ← match args.branch?, args.goals? with
       | .some branchId, .none => do
         match state.goalStates[branchId]? with
         | .none => Protocol.throw $ .errorIndex s!"Invalid state index {branchId}"
