@@ -1,6 +1,6 @@
 namespace Pantograph
 
 @[export pantograph_version]
-def version := "0.3.19"
+def version := "0.3.20"
 
 end Pantograph
