@@ -178,6 +178,7 @@ def createContextStateFromFile
   let (env, parserState, messages) ← match env? with
     | .some env => pure (env, {}, .empty)
     | .none =>
+      Lean.enableInitializersExecution
       -- Only process the header if we don't have an environment.
       let (env, messages) ← Elab.processHeader header opts messages inputCtx
       pure (env, parserState, messages)
