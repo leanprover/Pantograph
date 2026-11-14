@@ -80,15 +80,27 @@ def unfoldMatchers (expr : Expr) : CoreM Expr :=
     return .visit $ .mdata mdata (f.betaRev e.getAppRevArgs (useZeta := true))
 
 partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM Expr :=
-  withTraceNode `Catenary.Essentialization (λ _ex => return m!":= {← Meta.ppExpr expr}") do
+  withTraceNode `Pantograph.Delab (λ _ex => return m!":= {← Meta.ppExpr expr}") do
   let mut result ← Meta.transform (← instantiateMVars expr)
     λ e => e.withApp fun f args => do
     let .mvar mvarId := f | return .continue
     if (← read).contains mvarId then
       throwError s!"MVarId cycle containing {mvarId.name}"
 
-    trace[Catenary.Essentialization] "V {e}"
+    trace[Pantograph.Delab] "V {e}"
     let mvarDecl ← mvarId.getDecl
+
+    -- An under-applied delayed assigned mvar (e.g. produced by η-reduction
+    -- during unification) is η-expanded so it becomes fully applied.
+    if let some { fvars, .. } ← getDelayedMVarAssignment? mvarId then
+      if args.size < fvars.size && !(← mvarId.isAssigned) then
+        let arity := fvars.size - args.size
+        let expanded ← Meta.forallBoundedTelescope (← Meta.inferType e) arity λ ys _ => do
+          unless ys.size == arity do
+            throwError s!"Cannot eta-expand delayed assigned metavariable {mvarId.name} ({args.size + ys.size} < {fvars.size})"
+          Meta.mkLambdaFVars ys (mkAppN e ys)
+        trace[Nazrin.Essentialization] "E ?{mvarId.name} ({args.size} → {fvars.size})"
+        return .visit expanded
 
     -- This is critical to maintaining the interdependency of metavariables.
     -- Without setting `.syntheticOpaque`, Lean's metavariable elimination
@@ -105,33 +117,33 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
         panic! s!"In the context of {mvarId.name}, there are local context variable violations: {violations}"
 
       if let .some assign ← getExprMVarAssignment? mvarId then
-        trace[Catenary.Essentialization] "A ?{mvarId.name}"
+        trace[Pantograph.Delab] "A ?{mvarId.name}"
         assert! !(← mvarId.isDelayedAssigned)
         return .visit (mkAppN assign args)
       else if let some { fvars, mvarIdPending } ← getDelayedMVarAssignment? mvarId then
-        if ← isTracingEnabledFor `Catenary.Essentialization then
+        if ← isTracingEnabledFor `Pantograph.Delab then
           let substTableStr := ",".intercalate $
             Array.zipWith (λ fvar assign => s!"{fvar.fvarId!.name} := {assign}") fvars args |>.toList
-          trace[Catenary.Essentialization]"MD ?{mvarId.name} := ?{mvarIdPending.name} [{substTableStr}]"
+          trace[Pantograph.Delab]"MD ?{mvarId.name} := ?{mvarIdPending.name} [{substTableStr}]"
 
         unless args.size ≥ fvars.size do
           throwError s!"During instantiation, trailing fvar in delayed assigned metavariable {← Meta.ppExpr e} assigned to {mvarIdPending.name} ({args.size} < {fvars.size})"
         if !args.isEmpty then
-          trace[Catenary.Essentialization] "─ Arguments Begin"
+          trace[Pantograph.Delab] "─ Arguments Begin"
 
         if !args.isEmpty then
-          trace[Catenary.Essentialization] "─ Arguments End"
+          trace[Pantograph.Delab] "─ Arguments End"
 
         if let .some inner ← getExprMVarAssignment? mvarIdPending then
           let pending ← mvarIdPending.withContext do
-            trace[Catenary.Essentialization] "Pre: {inner}"
+            trace[Pantograph.Delab] "Pre: {inner}"
             self mvarIdPending $ (← inner.abstractM fvars).instantiateRev args
 
           let args ← args.mapM self0
 
           -- Tail arguments
           let result := mkAppRange pending fvars.size args.size args
-          trace[Catenary.Essentialization] "MD {result}"
+          trace[Pantograph.Delab] "MD {result}"
           -- Some inner mvars may have been transposed. They need to be processed here
           return .done result
         else if let .some { fvars := fvars', mvarIdPending := mvarIdPending' } ← getDelayedMVarAssignment? mvarIdPending then
@@ -141,7 +153,7 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
           return .visit $ mkAppN (.mvar mvarIdPending) args
         else
           let args ← args.mapM self0
-          trace[Catenary.Essentialization] "T1"
+          trace[Pantograph.Delab] "T1"
           let result := mkAppN f args
           return .done result
 
@@ -149,14 +161,14 @@ partial def instantiateDelayedMVarsInner (expr : Expr) : ReaderT MVarIdSet MetaM
       else
         -- Not assigned or delayed assigned
         if !args.isEmpty then
-          trace[Catenary.Essentialization] "─ Arguments Begin"
+          trace[Pantograph.Delab] "─ Arguments Begin"
         let args ← args.mapM self0
         if !args.isEmpty then
-          trace[Catenary.Essentialization] "─ Arguments End"
+          trace[Pantograph.Delab] "─ Arguments End"
 
-        trace[Catenary.Essentialization] "M ?{mvarId.name}"
+        trace[Pantograph.Delab] "M ?{mvarId.name}"
         return .done (mkAppN f args)
-  trace[Catenary.Essentialization] "Result {result}"
+  trace[Pantograph.Delab] "Result {result}"
   return result
   where
   self (mvarId : MVarId) (e : Expr) :=
