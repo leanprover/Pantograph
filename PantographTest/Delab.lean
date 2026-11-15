@@ -109,7 +109,8 @@ def test_projection_exists (env: Environment) : IO LSpec.TestSeq:= runTest do
   checkEq "numParams" numParams 2
   checkEq "numFields" numFields 2
 
-def test_matcher : TestT Elab.TermElabM Unit := do
+abbrev TestM := TestT Elab.TermElabM Unit
+def test_matcher : TestM := do
   let t ← parseSentence "Nat → Nat"
   let e ← parseSentence "fun (n : Nat) => match n with | 0 => 0 | k => k" (.some t)
   let .some _ ← Meta.matchMatcherApp? e.bindingBody! | fail "Must be a matcher app"
@@ -136,7 +137,7 @@ def test_intro_delay_intro : TestT Elab.TermElabM Unit := do
     let sexp ← serializeExpressionSexp (← instantiateAll $ ← condBody.getType)
     checkTrue "condBody/target" $ sexp.startsWith "((:c Eq) (:c Nat) ((:lambda a (:c Nat) (:subst"
 
-def test_doubly_nested_delayed_assigned : TestT Elab.TermElabM Unit := do
+def test_doubly_nested_delayed_assigned : TestM := do
   let statement ← Elab.Term.elabTerm (← `(term|∀ (i : Nat), { t : Prop // ∃ f : Nat → Nat → t, ∀ (j : Nat), f j j = f i i })) .none
   Meta.forallTelescope statement λ _fvars target => do
   let goal := (← Meta.mkFreshExprSyntheticOpaqueMVar target).mvarId!
@@ -148,6 +149,47 @@ def test_doubly_nested_delayed_assigned : TestT Elab.TermElabM Unit := do
   cond2B.withContext do
     let sexp ← serializeExpressionSexp (← instantiateAll $ ← cond2B.getType)
     checkTrue "cond2B/target" $ sexp.startsWith "((:c Eq)"
+
+/--
+Higher-order pattern unification eta-reduces `?m x := ?n x` into `?m := ?n`,
+leaving the delayed assigned `?n` under-applied. This caused an error before
+with the incorrectly assumed invariant that a delayed mvar always carries at
+least as many arguments as its context length.
+-/
+private def mkUnderAppliedDelayedMVar : TestT Elab.TermElabM (Expr × MVarId) := do
+  let nat := mkConst ``Nat
+  let m ← Meta.mkFreshExprMVar (← mkArrow nat nat) (kind := .natural)
+  let (lam, g) ← Meta.withLocalDeclD `x nat λ x => do
+    let g ← Meta.mkFreshExprSyntheticOpaqueMVar nat
+    return (← Meta.mkLambdaFVars #[x] g, g.mvarId!)
+  Meta.withLocalDeclD `x nat λ x => do
+    checkTrue "unify" $ ← Meta.isDefEq (mkApp m x) (lam.beta #[x])
+  let m ← instantiateMVars m
+  let .mvar mvarId := m | throwError s!"Not an mvar: {m}"
+  checkTrue "delayed" $ ← mvarId.isDelayedAssigned
+  return (m, g)
+
+private def test_under_applied_delayed_unassigned : TestM := do
+  let (m, g) ← mkUnderAppliedDelayedMVar
+  let result ← instantiateDelayedMVars m
+  checkTrue "is λ" result.isLambda
+  Meta.lambdaTelescope result λ xs body => do
+    checkEq "arity" xs.size 1
+    let .some invocation ← toDelayedMVarInvocation body
+      | fail s!"Not a delayed mvar invocation: {body}"
+    checkEq "pending" invocation.mvarIdPending.name g.name
+    checkEq "tail" invocation.tail.size 0
+
+/-- Assign the delayed mvar above to `x + 1`. After instantiation, we should
+have an η-expanded lambda -/
+private def test_under_applied_delayed_assigned : TestM := do
+  let (m, g) ← mkUnderAppliedDelayedMVar
+  g.withContext do
+    let some x := (← getLCtx).lastDecl | panic! "Context must not be empty"
+    g.assign $ mkNatAdd x.toExpr (mkNatLit 1)
+  let result ← instantiateDelayedMVars m
+  let expected := .lam `x (mkConst ``Nat) (mkNatAdd (.bvar 0) (mkNatLit 1)) .default
+  checkTrue "result" $ result == expected
 
 def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
   [
@@ -162,4 +204,6 @@ def suite (env: Environment): List (String × IO LSpec.TestSeq) :=
     ("Matcher", runTestTermElabM env test_matcher),
     ("intro delay intro", runTestTermElabM env test_intro_delay_intro),
     ("doubly_nested_delayed_assigned", runTestTermElabM env test_doubly_nested_delayed_assigned),
+    ("under-applied delayed unassigned", runTestTermElabM env test_under_applied_delayed_unassigned),
+    ("under-applied delayed assigned", runTestTermElabM env test_under_applied_delayed_assigned),
   ]
