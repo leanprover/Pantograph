@@ -100,7 +100,7 @@ def checkEnvConflicts (src src' dst : Environment) : ExceptT String IO Environme
     throw "Modification of imports is not allowed"
   -- Replay all dst constants in src
   let env ← try
-      src.replay $ dstConstants.foldl (init := .emptyWithCapacity dstConstants.size) λ acc (k, v) => acc.insert k v
+      simpleReplay src $ dstConstants.foldl (init := .emptyWithCapacity dstConstants.size) λ acc (k, v) => acc.insert k v
     catch ex : IO.Error =>
       throw ex.toString
   -- check if `constants` can fit into `src'`
@@ -128,6 +128,9 @@ def checkEnvConflicts (src src' dst : Environment) : ExceptT String IO Environme
     throw s!"{srcConstantsList} not accounted for"
   return env
   where
+  simpleReplay (env : Environment) (newConstants : Std.HashMap Name ConstantInfo) :
+    IO Environment := do
+    return .ofKernelEnv (← env.toKernelEnv.replay newConstants)
   isInternalSymbol (name: Name) : Bool := match name with
     | .str _ n => n == "_cstage1" || n == "_cstage2"
     | _ => false
